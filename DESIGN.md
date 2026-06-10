@@ -214,6 +214,10 @@ read/write budget asymmetry:
   multi-user KBs, free vocabulary here.
 - Read-time ambiguity is permissive: "Lisa" matching two nodes activates both; over-supply
   costs tokens, not correctness. Repair (merge/split) belongs to consolidation.
+- **The user themself is never an entity node.** The whole graph already models them — their
+  history under the topical crowns, their tendencies in the profile. A `people/<the-user>`
+  node splits the self-model in two and starves the profile (the Franklin run found this
+  live; the harvester contract now states it).
 
 ## Data model sketch
 

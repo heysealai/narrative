@@ -159,21 +159,37 @@ narrative open <distillant> | profile | map | stream | stats | forget <id>
 | `llm.rs` | Messages API client (raw HTTP) + scripted mock |
 | `sim.rs` | the REPL |
 
-## The Crusoe experiment
+## The corpus experiments
 
-The full text of *Robinson Crusoe* (121k words) has been fed through the
-engine twice. The original run (a Claude session playing harvester — **22
-distillants, 78 leaves, 172 episodes**) recovered the novel's character arc
-as drift arithmetic (piety: −0.58 → +0.87 across 25 nudges, flipping exactly
-at the conversion): [docs/crusoe-tracking-report.md](docs/crusoe-tracking-report.md).
-The checked-in graph is the **June 2026 rebuild on the drift-aware engine**
-(Sonnet subagents as harvester, 66 chunks, one consolidation step per chunk):
-**50 distillants, 294 leaves, 339 episodes**, three levels deep where the
-material demanded it, and a 20-question interrogation scoring 17 fully
-grounded / 3 partial / 0 misses — the evaluative probes (regret, trust,
-fear) routing mechanically off derived facet families:
-[docs/crusoe-rebuild-run.md](docs/crusoe-rebuild-run.md).
-Graph: [examples/crusoe/](examples/), explorable via the CLI.
+Three full first-person books have been fed through the engine end to end —
+each chosen to stress a different part of the design, each checked in under
+[examples/](examples/) with a run report, and each interrogated afterwards
+under a strict grounding rule (any claim not seen in a render counts as
+contamination):
+
+- ***Robinson Crusoe*** (Defoe, ~121k words) — the self-model and state
+  supersession. Run twice: the original session
+  ([docs/crusoe-tracking-report.md](docs/crusoe-tracking-report.md))
+  recovered the character arc as drift arithmetic (piety: −0.58 → +0.87
+  across 25 nudges, flipping exactly at the conversion); the checked-in
+  graph is the June 2026 rebuild on the drift-aware engine — **50
+  distillants, 294 leaves, 339 episodes**, 20-question interrogation 17
+  full / 3 partial / 0 miss, with regret/trust/fear probes routing
+  mechanically off derived facet families:
+  [docs/crusoe-rebuild-run.md](docs/crusoe-rebuild-run.md).
+- ***The Autobiography of Benjamin Franklin*** (~65k words) — the profile
+  under a real life: the 13-virtues project lands as
+  `temperament/virtue-project`, the civic career builds an 81-node
+  registry, and Franklin's "errata" route as regret. **92 distillants, 278
+  leaves, 237 episodes**; 10 questions, 8 full / 2 partial / 0 miss:
+  [docs/franklin-run.md](docs/franklin-run.md).
+- ***My Ántonia*** (Cather, ~81k words) — the people registry when the
+  user's memory is mostly about someone else: `people/antonia` grows a
+  four-level subtree organized by epoch and relationship. **54 distillants,
+  311 leaves, 205 episodes**; 10 questions, 8 full / 2 partial / 0 miss —
+  and the facet probes that routed on Crusoe correctly *don't* route here,
+  because Jim Burden's voice never names regret or trust; descent recovers
+  them: [docs/antonia-run.md](docs/antonia-run.md).
 
 > Reports in `docs/` that predate the June 2026 rename use *midpoint* for
 > today's *distillant* (and *distillant* for its *line*); each carries a
