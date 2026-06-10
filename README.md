@@ -161,16 +161,23 @@ narrative open <distillant> | profile | map | stream | stats | forget <id>
 
 ## The Crusoe experiment
 
-The full text of *Robinson Crusoe* (121k words) was fed through the engine
-with a Claude session playing harvester: **22 distillants, 78 leaves, 172
-episodes**, with the profile recovering the novel's character arc as drift
-arithmetic (piety: −0.58 → +0.87 across 25 nudges, flipping exactly at the
-conversion). Report: [docs/crusoe-tracking-report.md](docs/crusoe-tracking-report.md).
+The full text of *Robinson Crusoe* (121k words) has been fed through the
+engine twice. The original run (a Claude session playing harvester — **22
+distillants, 78 leaves, 172 episodes**) recovered the novel's character arc
+as drift arithmetic (piety: −0.58 → +0.87 across 25 nudges, flipping exactly
+at the conversion): [docs/crusoe-tracking-report.md](docs/crusoe-tracking-report.md).
+The checked-in graph is the **June 2026 rebuild on the drift-aware engine**
+(Sonnet subagents as harvester, 66 chunks, one consolidation step per chunk):
+**50 distillants, 294 leaves, 339 episodes**, three levels deep where the
+material demanded it, and a 20-question interrogation scoring 17 fully
+grounded / 3 partial / 0 misses — the evaluative probes (regret, trust,
+fear) routing mechanically off derived facet families:
+[docs/crusoe-rebuild-run.md](docs/crusoe-rebuild-run.md).
 Graph: [examples/crusoe/](examples/), explorable via the CLI.
 
-> Historical reports in `docs/` predate the June 2026 rename and use
-> *distillant* for today's *distillant* (and *distillant* for its *line*);
-> each carries a terminology note.
+> Reports in `docs/` that predate the June 2026 rename use *midpoint* for
+> today's *distillant* (and *distillant* for its *line*); each carries a
+> terminology note.
 
 ## Status
 
