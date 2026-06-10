@@ -1,0 +1,4975 @@
+{
+  "episodes": [
+    {
+      "id": "ep-1",
+      "at": 1781032205,
+      "text": "Father, confined with gout and in tears, delivered his middle-station counsel and a prophetic warning that God would not bless a life at sea.",
+      "tags": [
+        "people/parents"
+      ]
+    },
+    {
+      "id": "ep-2",
+      "at": 1781032205,
+      "text": "At eighteen, asked mother to win father's consent for one voyage; she refused in a passion and said they would never consent.",
+      "tags": [
+        "people/parents"
+      ]
+    },
+    {
+      "id": "ep-3",
+      "at": 1781032238,
+      "text": "On 1 September 1651, boarded a London-bound ship at Hull without telling father or mother, enticed by a companion sailing free on his father's ship.",
+      "tags": [
+        "life/voyages",
+        "people/parents"
+      ]
+    },
+    {
+      "id": "ep-4",
+      "at": 1781032238,
+      "text": "In the first storm out of the Humber, sick and terrified, vowed to God to go home to father and never sail again if spared.",
+      "tags": [
+        "life/voyages",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-5",
+      "at": 1781032238,
+      "text": "The night after the storm calmed, drowned all repentance and vows in a bowl of punch with his companion; within five or six days had 'complete victory over conscience'.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-6",
+      "at": 1781032238,
+      "text": "At anchor in Yarmouth Roads on the eighth day a terrible storm rose; the master himself cried 'we shall be all lost'; nearby ships foundered or cut their masts.",
+      "tags": [
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-7",
+      "at": 1781032286,
+      "text": "The first ship foundered in Yarmouth Roads: masts cut away, all hands pumping, rescued by a boat from a lighter ship; watched her sink a quarter hour after getting off.",
+      "tags": [
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-8",
+      "at": 1781032286,
+      "text": "The rescued crew walked to Yarmouth, treated humanely; given money to go to London or back to Hull.",
+      "tags": [
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-9",
+      "at": 1781032286,
+      "text": "The master of the lost ship (his comrade's father) warned him, Jonah-like, never to go to sea again and to go back to his father — 'you will meet with nothing but disasters' otherwise.",
+      "tags": [
+        "life/voyages",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-10",
+      "at": 1781032317,
+      "text": "Chose shame over repentance: went to London by land rather than home to Hull, and looked out for a new voyage.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-11",
+      "at": 1781032317,
+      "text": "First Guinea voyage with an honest captain-friend: carried 40 pounds of trifles, brought home gold dust worth nearly 300 pounds; learned navigation; the captain died soon after return.",
+      "tags": [
+        "money/trade",
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-12",
+      "at": 1781032317,
+      "text": "Second Guinea voyage: taken by a Turkish rover of Sallee after a fight (three crew killed), carried prisoner into Sallee and made the pirate captain's personal slave.",
+      "tags": [
+        "life/slavery-sallee"
+      ]
+    },
+    {
+      "id": "ep-13",
+      "at": 1781032317,
+      "text": "Two years a slave doing house drudgery and minding the ship, finding no rational prospect of escape — no fellow Englishman to attempt it with.",
+      "tags": [
+        "life/slavery-sallee"
+      ]
+    },
+    {
+      "id": "ep-14",
+      "at": 1781032346,
+      "text": "Escaped Sallee: sent fishing in the patron's converted longboat, he stocked it by tricks (biscuit, water, beeswax, tools, fowling-pieces, powder via the Moor Moely), then ran for open sea.",
+      "tags": [
+        "life/slavery-sallee",
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-15",
+      "at": 1781032346,
+      "text": "Tossed the Moor Ismael (Moely) overboard at gunpoint to swim ashore; kept the boy Xury, who swore by Mahomet to be faithful and go all over the world with him.",
+      "tags": [
+        "people/xury",
+        "life/slavery-sallee"
+      ]
+    },
+    {
+      "id": "ep-16",
+      "at": 1781032346,
+      "text": "Feinted toward the Straits then turned south by east at dusk down the Barbary coast, sailing through the night some 150 miles.",
+      "tags": [
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-17",
+      "at": 1781032364,
+      "text": "Anchored in a river mouth on the wild Barbary coast: night full of howling beasts, fired on a huge creature swimming at the boat; no landing by night.",
+      "tags": [
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-18",
+      "at": 1781032364,
+      "text": "Xury offered to go ashore for water alone — 'if wild mans come, they eat me, you go wey' — which made him love the boy ever after; Xury found water and shot a hare-like creature.",
+      "tags": [
+        "people/xury"
+      ]
+    },
+    {
+      "id": "ep-19",
+      "at": 1781032364,
+      "text": "Coasted a hundred miles of waste, uninhabited lion country, twice failing to stand out for Teneriffe; strategy is to follow the shore until meeting an English trading vessel.",
+      "tags": [
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-20",
+      "at": 1781032376,
+      "text": "Shot a lion on the Barbary shore; Xury finished and helped skin it over a whole day — the dried hide became his bed in the boat.",
+      "tags": [
+        "people/xury",
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-21",
+      "at": 1781032376,
+      "text": "Traded by signs with friendly naked negroes ashore: they gave dried flesh, corn and water; he shot a leopard menacing them and gave them its flesh, keeping the skin.",
+      "tags": [
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-22",
+      "at": 1781032376,
+      "text": "Doubled Cape de Verde after some three weeks coasting; Xury cried 'Master, a ship with a sail!'",
+      "tags": [
+        "life/voyages",
+        "people/xury"
+      ]
+    },
+    {
+      "id": "ep-23",
+      "at": 1781032410,
+      "text": "Rescued at sea off Cape de Verde by a Portuguese ship bound for Brazil; the captain refused payment, bought the boat for 80 pieces of eight and the skins for 60 ducats, and delivered every item back punctually.",
+      "tags": [
+        "people/portuguese-captain"
+      ]
+    },
+    {
+      "id": "ep-24",
+      "at": 1781032410,
+      "text": "Let Xury go to the Portuguese captain, who bound himself to free the boy in ten years if he turned Christian; Xury was willing — but the parting was regretted ever after.",
+      "tags": [
+        "people/xury",
+        "people/portuguese-captain"
+      ]
+    },
+    {
+      "id": "ep-25",
+      "at": 1781032410,
+      "text": "Settled in Brazil: learned sugar-planting at an ingenio, bought uncured land, planted food for two years then tobacco beside his neighbour Wells.",
+      "tags": [
+        "work/plantation"
+      ]
+    },
+    {
+      "id": "ep-26",
+      "at": 1781032410,
+      "text": "Reflected bitterly that he had recreated his father's middle station five thousand miles from home, living 'like a man cast away upon some desolate island'.",
+      "tags": [
+        "temperament",
+        "people/parents"
+      ]
+    },
+    {
+      "id": "ep-27",
+      "at": 1781032437,
+      "text": "The captain brought the 100 pounds from London as English goods plus unasked-for plantation tools, and a bonded servant; the goods sold at four times their value.",
+      "tags": [
+        "people/portuguese-captain",
+        "money/trade"
+      ]
+    },
+    {
+      "id": "ep-28",
+      "at": 1781032437,
+      "text": "Three planters secretly proposed he sail as supercargo on a private Guinea slaving voyage; he agreed 'with all my heart' against every interest, made a will, and left the plantation under covenant.",
+      "tags": [
+        "work/plantation",
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-29",
+      "at": 1781032462,
+      "text": "Sailed on the Guinea slaving voyage 1 September 1659 — the same day eight years after leaving Hull; ship of 120 tons, six guns, fourteen men.",
+      "tags": [
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-30",
+      "at": 1781032462,
+      "text": "A twelve-day hurricane drove the ship to the Guiana coast: one man dead of calenture, a man and the boy washed overboard; course changed for Barbados.",
+      "tags": [
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-31",
+      "at": 1781032462,
+      "text": "A second storm struck the ship onto a sand bar near an unknown land; all eleven took to the boat, which a mountain-like wave overset; he alone was carried ashore half-drowned.",
+      "tags": [
+        "life/island",
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-32",
+      "at": 1781032475,
+      "text": "Carried ashore alive through the breakers, dashed against a rock but clambered up the cliffs — the only soul saved of eleven; nothing left of the crew but three hats, a cap, and two odd shoes.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-33",
+      "at": 1781032475,
+      "text": "First night on the island spent in a thorny tree with a truncheon stick, after finding fresh water; possessions reduced to a knife, a tobacco-pipe, and a box of tobacco.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-34",
+      "at": 1781032475,
+      "text": "Next day the tide had lifted the ship onto the bank within a mile of shore; swam out, boarded by a rope at the fore-chains, found the provisions dry.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-35",
+      "at": 1781032497,
+      "text": "Built a raft of spare yards and topmast lengths and ferried the first cargo ashore — three chests of provisions, the carpenter's chest, arms and two dry powder barrels — nearly losing it on a shoal in the creek.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-36",
+      "at": 1781032497,
+      "text": "Climbed the steep hill and 'saw my fate, to my great affliction': an island ringed by sea, apparently barren and uninhabited, two smaller islands some three leagues west.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-37",
+      "at": 1781032530,
+      "text": "Eleven salvage voyages in thirteen days stripped the wreck: tools, grindstone, seven muskets, bullets, rigging, every sail cut to canvas, bread, rum, sugar, flour, cables and ironwork.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-38",
+      "at": 1781032530,
+      "text": "The last heavy raft of cables and iron overset in the cove; recovered most of the cable and some iron by diving, with infinite labour.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-39",
+      "at": 1781032530,
+      "text": "Found thirty-six pounds in coin aboard and mocked it — 'O drug! what art thou good for? one of those knives is worth all this heap.'",
+      "tags": [
+        "life/island/stores",
+        "money"
+      ]
+    },
+    {
+      "id": "ep-40",
+      "at": 1781032530,
+      "text": "A wild cat sat composed on a chest, took a bit of biscuit from him, and marched off.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-41",
+      "at": 1781032548,
+      "text": "Took the coin after all, wrapped in canvas, and swam ashore just ahead of a storm; by morning the ship was gone from sight — nothing left to salvage but drift.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-42",
+      "at": 1781032548,
+      "text": "Built the fortress home: a double-staked half-circle fence packed with ship's cable below a rock face, entered only by a ladder lifted in after him; double tent within, cave dug behind as a cellar.",
+      "tags": [
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-43",
+      "at": 1781032548,
+      "text": "A lightning storm struck terror about the powder; spent a fortnight dividing 240 pounds of gunpowder into a hundred parcels hidden among the rocks.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-44",
+      "at": 1781032548,
+      "text": "Discovered goats on the island — shy, subtle, and swift.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-45",
+      "at": 1781032577,
+      "text": "Killed his first she-goat (having learned goats don't look up — get above them on the rocks); her kid followed him home and would not eat, so he killed and ate it too.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-46",
+      "at": 1781032577,
+      "text": "Reasoned himself out of despair by the seaside: 'Where are the rest of you? Did not you come, eleven of you in the boat? Where are the ten?'",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-47",
+      "at": 1781032577,
+      "text": "Set up a great cross-post at the landing place carved 'I came on shore here on the 30th September 1659', notching every day, with longer notches for Sabbaths and month-firsts.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-48",
+      "at": 1781032602,
+      "text": "Drew up the famous debtor-and-creditor account of his condition — evil against good — concluding there is something to be thankful for in the most miserable state.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-49",
+      "at": 1781032602,
+      "text": "Made a table and chair, hewed boards one per tree, shelved the cave into a 'general magazine', and cut a back door out through the rock beyond the pale.",
+      "tags": [
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-50",
+      "at": 1781032602,
+      "text": "Began the daily journal — to continue only while the ink lasts — opening: 'I, poor miserable Robinson Crusoe... came on shore on this dismal, unfortunate island, which I called The Island of Despair.'",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-51",
+      "at": 1781032653,
+      "text": "Made a spade of Brazilian iron-tree wood (near spoiling the axe), a mortar-hod in place of an impossible wheelbarrow, and spent eighteen days widening the cave into warehouse, kitchen, dining-room and cellar.",
+      "tags": [
+        "life/island/stores",
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-52",
+      "at": 1781032653,
+      "text": "The over-large cave fell in on one side on December 10 — 'if I had been under it, I had never wanted a gravedigger' — and had to be propped with a ceiling.",
+      "tags": [
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-53",
+      "at": 1781032653,
+      "text": "Neglected the Sabbath notches on the calendar post and lost track of which day was Sunday.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-54",
+      "at": 1781032696,
+      "text": "Propped the fallen cave with posts and boards that became room partitions; finished the great outer wall (2 January to 14 April), camouflaged so no habitation shows.",
+      "tags": [
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-55",
+      "at": 1781032696,
+      "text": "Splinted a lamed kid's leg and nursed it tame at his door — the first thought of breeding tame creatures against the day powder and shot run out.",
+      "tags": [
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-56",
+      "at": 1781032696,
+      "text": "Shaken-out husks from an old poultry-feed bag sprang up as ten or twelve ears of perfect English barley and stalks of rice; he wept at the miracle, then his thankfulness 'began to abate' when he remembered the bag.",
+      "tags": [
+        "life/island/crops",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-57",
+      "at": 1781032696,
+      "text": "Failed at coopering casks after weeks of trying; lights the dark hours with a clay lamp of goat tallow and oakum wick.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-58",
+      "at": 1781032724,
+      "text": "An earthquake — three shocks eight minutes apart — cracked the cave posts and brought a rock-top down half a mile off, followed by a three-hour hurricane; he cut a sink through the fortification to drain the flood rain.",
+      "tags": [
+        "life/island",
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-59",
+      "at": 1781032724,
+      "text": "Invented a foot-treadle wheel to turn the great grindstone with hands free — a full week's work — then spent two days grinding the notched axes sharp.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-60",
+      "at": 1781032724,
+      "text": "Pieces of the wreck drove ashore after the storm, starting with a small barrel.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-61",
+      "at": 1781032753,
+      "text": "The earthquake heaved the wreck up and the sand away; from 3 May to 15 June he broke her up daily, landing timber, planks, hundredweights of iron and near a hundredweight of sheet lead.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-62",
+      "at": 1781032753,
+      "text": "Caught his first turtle (16 June) with threescore eggs in her — the most savoury meat since landing.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-63",
+      "at": 1781032753,
+      "text": "Fell violently ill with an ague (19 June on): fits of seven hours, too weak to fetch water; prayed for the first time since the storm off Hull — 'Lord, look upon me! Lord, pity me!'",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-64",
+      "at": 1781032773,
+      "text": "In fevered sleep dreamed a man bright as flame descended from a black cloud with a spear, saying 'Seeing all these things have not brought thee to repentance, now thou shalt die.'",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-65",
+      "at": 1781032773,
+      "text": "Recognised his father's prophecy fulfilled — 'my dear father's words are come to pass' — and cried 'Lord, be my help, for I am in great distress': the first true prayer in many years.",
+      "tags": [
+        "temperament",
+        "people/parents"
+      ]
+    },
+    {
+      "id": "ep-66",
+      "at": 1781032773,
+      "text": "Asked God's blessing over a supper of roasted turtle eggs — the first meat he ever remembered blessing in his life.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-67",
+      "at": 1781032792,
+      "text": "Reasoned his way from creation to providence at the seaside, and was struck dumb by conscience: 'Why wert thou not drowned in Yarmouth Roads... Dost thou ask, what have I done?'",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-68",
+      "at": 1781032792,
+      "text": "Sought the Brazilian tobacco cure and found 'a cure both for soul and body' in the chest: dosed himself with tobacco in rum and opened the Bible to 'Call on Me in the day of trouble, and I will deliver thee.'",
+      "tags": [
+        "temperament",
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-69",
+      "at": 1781032792,
+      "text": "Kneeled and prayed for the first time in his life before taking the tobacco-rum and sleeping a day and a night through.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-70",
+      "at": 1781032815,
+      "text": "Threw down the Bible at 'He is exalted a Prince and a Saviour, to give repentance' and cried aloud 'Jesus, thou son of David, give me repentance!' — the first prayer, in the true sense, of his life; deliverance now means deliverance from guilt, not from the island.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-71",
+      "at": 1781032815,
+      "text": "Surveyed the island (from 15 July): the creek becomes a fresh brook through savannah meadows of wild tobacco, aloes and imperfect sugar-canes; beyond, a flourishing vale 'like a planted garden'.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-72",
+      "at": 1781032815,
+      "text": "Stood lord of the green vale — 'king and lord of all this country indefensibly' — and slept his first night away from home in a tree.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-73",
+      "at": 1781032815,
+      "text": "Gathered grapes to dry as raisins for the wet season, with limes and lemons; the first headload of grapes spoiled, so he made bags and resolved to cure them where they hung.",
+      "tags": [
+        "life/island/crops"
+      ]
+    },
+    {
+      "id": "ep-74",
+      "at": 1781032872,
+      "text": "Built the bower — the 'country house' — in the fruitful vale: double hedge fence, ladder entry; resolved against moving there permanently to stay near the sea and any chance of deliverance.",
+      "tags": [
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-75",
+      "at": 1781032872,
+      "text": "Two hundred bunches of grapes dried into raisins just before the rains — the best part of his winter food; the cat returned with three kittens, the start of a cat plague.",
+      "tags": [
+        "life/island/crops",
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-76",
+      "at": 1781032872,
+      "text": "Kept the first anniversary (30 September 1660) as a solemn fast of confession; re-established Sabbath-keeping by dividing weeks afresh.",
+      "tags": [
+        "temperament",
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-77",
+      "at": 1781032872,
+      "text": "First sowing lost to the dry season — sowed two-thirds at the wrong time and saved a handful, which taught the lesson before the seed was gone.",
+      "tags": [
+        "life/island/crops"
+      ]
+    },
+    {
+      "id": "ep-78",
+      "at": 1781032872,
+      "text": "Second sowing near the bower in February yielded a good crop: the seasons mastered — two seed-times, two harvests a year; rainy mid-Feb to mid-April and mid-Aug to mid-Oct.",
+      "tags": [
+        "life/island/crops"
+      ]
+    },
+    {
+      "id": "ep-79",
+      "at": 1781032872,
+      "text": "The cut stakes of the hedge shot out into living trees; planted a second living double row round the home wall — shade first, defence later.",
+      "tags": [
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-80",
+      "at": 1781032872,
+      "text": "Made wicker baskets from the stake-tree's twigs, remembering the basket-maker's craft watched as a boy; deep baskets stand ready for corn.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-81",
+      "at": 1781032872,
+      "text": "Crossed the island westward and descried high land fifteen to twenty leagues off — Spanish America or the cannibal coast; acquiesced 'in the dispositions of Providence' rather than wish himself there.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-82",
+      "at": 1781032872,
+      "text": "Knocked down and kept a young parrot — it would be years before it spoke his name.",
+      "tags": [
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-83",
+      "at": 1781032916,
+      "text": "Toured the far shore — turtles innumerable, penguins among the fowl — set a great pole as a mark, then got lost for days in a hazy wooded valley coming home.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-84",
+      "at": 1781032916,
+      "text": "The dog seized a young kid which he saved, penned at the bower, and tamed by hunger till it followed like a dog; home felt 'a perfect settlement' and he resolved never to range far again.",
+      "tags": [
+        "life/island/animals",
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-85",
+      "at": 1781032916,
+      "text": "On the second anniversary, caught himself mid-prayer: 'How canst thou become such a hypocrite, to pretend to be thankful for a condition thou wouldst rather pray to be delivered from?' — and gave thanks instead for his opened eyes.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-86",
+      "at": 1781032916,
+      "text": "Spent forty-two days making one shelf board; defended the growing corn with a hedge, the dog tied barking at the gate, and three shot birds hanged in chains — the fowls forsook that part of the island.",
+      "tags": [
+        "life/island/crops",
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-87",
+      "at": 1781032916,
+      "text": "Reaped the second harvest with a cutlass-sickle: near two bushels of rice and two and a half of barley from half a peck — every grain kept for seed; 'now I worked for my bread'.",
+      "tags": [
+        "life/island/crops"
+      ]
+    },
+    {
+      "id": "ep-88",
+      "at": 1781032936,
+      "text": "Poll spoke — 'Poll' — the first word heard on the island from any mouth but his own.",
+      "tags": [
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-89",
+      "at": 1781032936,
+      "text": "Two months of failed clay-work yielded two ugly sun-dried jars; then a shard burnt stone-hard in the cook-fire revealed firing, and a night-tended pile produced glazed, fire-proof pots — 'no joy at a thing of so mean a nature was ever equal to mine'; boiled his first broth.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-90",
+      "at": 1781032936,
+      "text": "Built the bread chain by hand: hollowed hardwood mortar with iron-wood pestle, calico-neckcloth sieves, and an ember-hearth oven of broad clay pans — 'became in little time a good pastrycook'.",
+      "tags": [
+        "life/island/crops",
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-91",
+      "at": 1781032936,
+      "text": "Sowed above an acre in two fenced plots with living hedges; the third year went almost wholly to corn and utensils.",
+      "tags": [
+        "life/island/crops"
+      ]
+    },
+    {
+      "id": "ep-92",
+      "at": 1781032960,
+      "text": "Three or four weeks failed to right the ship's old boat; then built a great cedar periagua — twenty days felling, months shaping, big enough for twenty-six men — without ever solving the launch.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-93",
+      "at": 1781032960,
+      "text": "The canoe lay a hundred yards uphill from water; a canal to it would have taken ten or twelve years of one man's digging — gave it over, 'the folly of beginning a work before we count the cost'.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-94",
+      "at": 1781032960,
+      "text": "Kept the fourth anniversary changed: the world now 'a thing remote... a place I had lived in, but was come out of' — lord of the manor with nothing to covet.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-95",
+      "at": 1781032977,
+      "text": "Took the inventory of a king of uselessness: timber for a fleet, grapes for its lading, corn he must cap lest it spoil — 'we enjoy just as much as we can use, and no more'; would trade all his coin for turnip seed, a hand-mill and a bottle of ink.",
+      "tags": [
+        "temperament",
+        "money"
+      ]
+    },
+    {
+      "id": "ep-96",
+      "at": 1781032996,
+      "text": "Noticed the strange concurrence of days: ran away to Hull and was enslaved at Sallee the same date; escaped Yarmouth and Sallee the same day-year; born 30 September and cast on the island 30 September.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-97",
+      "at": 1781032996,
+      "text": "Reflected that without the wreck's salvage he must have lived 'like a mere savage', gnawing flesh like a beast — and worked his mind to sincere thankfulness.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-98",
+      "at": 1781033014,
+      "text": "Tailored a full suit of goatskins, hair outward against the rain, and after spoiling two or three attempts made a collapsible skin umbrella — 'I was a bad carpenter, but a worse tailor'.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-99",
+      "at": 1781033014,
+      "text": "Built a second, smaller periagua over near two years and dug a half-mile canal six feet wide to launch her; the first canoe lies as 'a memorandum to teach me to be wiser'.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-100",
+      "at": 1781033014,
+      "text": "Set out 6 November (year six) to sail round the island; a rock ledge and a furious eastward current at the point forced two days at anchor and a hilltop survey first.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-101",
+      "at": 1781033041,
+      "text": "The circumnavigation nearly killed him: the point current swept the canoe two leagues to sea — 'O happy desert! I shall never see thee more' — until a rock-split eddy and a rising breeze carried him back; he fell on his knees ashore in thanks and gave up boat-deliverance for good.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-102",
+      "at": 1781033041,
+      "text": "Woke at the bower to a voice — 'Robin, Robin, Robin Crusoe: poor Robin Crusoe! Where are you?' — Poll, perched on the hedge, speaking his own bemoaning lessons back to him.",
+      "tags": [
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-103",
+      "at": 1781033041,
+      "text": "A sedate year followed: mastered the potter's wheel, made a tobacco-pipe at last, and perfected baskets; the boat stays harboured on the far side, too dangerous to bring round.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-104",
+      "at": 1781033067,
+      "text": "Snares failed, pitfalls worked: caught an old he-goat (let go, not yet knowing 'hunger will tame a lion') and three kids — the founding of the tame flock.",
+      "tags": [
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-105",
+      "at": 1781033067,
+      "text": "Hedged a 150-by-100-yard enclosure in three months, hand-feeding the kids to familiarity; the flock grew to twelve in eighteen months and forty-three in two years more, across five fenced pieces with pens and gates.",
+      "tags": [
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-106",
+      "at": 1781033067,
+      "text": "Set up a dairy — sometimes a gallon or two of milk a day — and by many essays made butter, cheese and salt: 'What a table was here spread for me in the wilderness.'",
+      "tags": [
+        "life/island/animals",
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-107",
+      "at": 1781033067,
+      "text": "Dined like a king with his court: Poll the only one permitted to talk, the old dog at his right hand, two tame cats begging — the first cats long dead and buried by his own hand.",
+      "tags": [
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-108",
+      "at": 1781033067,
+      "text": "Sketched his own figure: shapeless goatskin cap, jacket and breeches, buskin flaps, saw and hatchet at the belt, basket on back, gun on shoulder, the great clumsy umbrella overhead, Mahometan whiskers.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-109",
+      "at": 1781033067,
+      "text": "From the hill found the killer current gone smooth — it shifts with the ebb and the wind; at evening it returned, running half a league off shore.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-110",
+      "at": 1781033092,
+      "text": "About noon, going to his boat, found the print of a man's naked foot on the sand — toes, heel, every part — and fled home 'like one pursued', mistaking every stump for a man; slept none.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-111",
+      "at": 1781033092,
+      "text": "Reasoned the footprint from devil to the likelier terror: savages of the mainland, blown over by canoe, ashore and gone again.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-112",
+      "at": 1781033109,
+      "text": "Fear banished religious hope for a time — reproached his own laziness and resolved to keep two or three years of corn always beforehand.",
+      "tags": [
+        "life/island/crops",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-113",
+      "at": 1781033109,
+      "text": "Three days walled in starving on barley-cakes, the goats half-spoiled for want of milking; tried to believe the print his own foot — measured it, and 'found my foot not so large by a great deal'.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-114",
+      "at": 1781033109,
+      "text": "Fear proposed absurdities: throw down the enclosures, turn the goats wild, dig up the corn, demolish the bower — 'fear of danger is ten thousand times more terrifying than danger itself'.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-115",
+      "at": 1781033126,
+      "text": "Fortified for war over two years: a second ten-foot-thick wall with seven musket ports (all seven guns mounted like cannon, firable in two minutes), and near twenty thousand osier stakes that grew into an impassable wood concealing the castle.",
+      "tags": [
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-116",
+      "at": 1781033126,
+      "text": "Split the goat flock against disaster: fenced a hidden three-acre natural clearing deep in the woods and moved ten she-goats and two he-goats there as a reserve herd.",
+      "tags": [
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-117",
+      "at": 1781033144,
+      "text": "At the unvisited SW point found the shore spread with skulls, hands, feet and bones round a cockpit-like fire circle — a cannibal feasting place; vomited with violence and fled, then wept thanks that his lot was cast on the other side.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-118",
+      "at": 1781033144,
+      "text": "Went dark for safety: two years without firing the gun, living off the tame flock and traps; abroad now with two pistols and a furbished cutlass in his goatskin belt.",
+      "tags": [
+        "life/island",
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-119",
+      "at": 1781033144,
+      "text": "Night and day began contriving how to destroy the cannibals at their feast and save a victim.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-120",
+      "at": 1781033160,
+      "text": "Planned a massacre — ambush hollow chosen, muskets double-loaded with slugs — and dreamed of letting fly in his sleep; daily three-mile tours to the hilltop to watch for canoes.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-121",
+      "at": 1781033160,
+      "text": "Cooler thought reversed the plan: 'What authority or call had I to be judge and executioner?' — they know it for no crime; attacking unprovoked would justify the Spaniards' butchery in America, and one escapee would bring thousands in revenge.",
+      "tags": [
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-122",
+      "at": 1781033183,
+      "text": "Gave humble thanks for being delivered from blood-guiltiness; for a year would not even climb the hill, lest he be tempted; moved the boat to a cove at the east end beyond the savages' reach.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-123",
+      "at": 1781033183,
+      "text": "Went smokeless: charcoal burned in the woods for home cooking, no nail driven nor gun fired for fear of noise; safety now costs more care than food.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-124",
+      "at": 1781033183,
+      "text": "Found a natural cave behind the brushwood — two shining eyes in the dark proved a monstrous old he-goat dying of age; buried him at the mouth. Within, past a ten-yard crawl, a safe retreat 'if five hundred savages were to hunt me'.",
+      "tags": [
+        "life/island/dwelling"
+      ]
+    },
+    {
+      "id": "ep-125",
+      "at": 1781033183,
+      "text": "Census in the twenty-third year: Poll twenty-six years with him (two more parrots talk, none like him), the dog dead at sixteen years, favourite cats and household kids, tame clipped sea-fowl breeding in the grove.",
+      "tags": [
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-126",
+      "at": 1781033206,
+      "text": "Nine naked savages with two canoes feasted on HIS side of the island (December, year twenty-three); he stood armed at the castle till the ebb took them, then found the remains at their fire.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-127",
+      "at": 1781033206,
+      "text": "Fifteen-odd months of frightful dreams followed — killing savages and justifying it nightly; durst not fire a gun, blessing the tame flock.",
+      "tags": [
+        "temperament",
+        "life/island/animals"
+      ]
+    },
+    {
+      "id": "ep-128",
+      "at": 1781033206,
+      "text": "In the great storm of 16 May (year twenty-four) heard distress guns at sea and burned a signal pile all night; daybreak showed a ship wrecked on the very rocks that once saved him from the current.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-129",
+      "at": 1781033206,
+      "text": "A drowned ship's boy came ashore — two pieces of eight and a tobacco pipe in his pockets, 'the last ten times more value than the first'; the longing for one saved soul shook him bodily.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-130",
+      "at": 1781033226,
+      "text": "Boarded the Spanish wreck (a day's careful tide-work): rescued the ship's starving dog, took chests with cordial waters, sweetmeats, shirts, handkerchiefs, two pounds of fine powder, shoes off two drowned men — and near twelve hundred pieces of eight with gold doubloons and wedges.",
+      "tags": [
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-131",
+      "at": 1781033226,
+      "text": "Reckoned the wreck-money 'dirt under my feet' — would have traded it all for three or four pair of English shoes and stockings — but lugged it home to the cave all the same.",
+      "tags": [
+        "money",
+        "life/island/stores"
+      ]
+    },
+    {
+      "id": "ep-132",
+      "at": 1781033226,
+      "text": "Two restless years of escape projects followed: counted the fortune wasted by leaving Brazil ('I might have been worth a hundred thousand moidores'), named defying his father his original sin, and bent wholly on a mad voyage to the cannibal mainland.",
+      "tags": [
+        "temperament",
+        "people/parents",
+        "work/plantation"
+      ]
+    },
+    {
+      "id": "ep-133",
+      "at": 1781033250,
+      "text": "Dreamed, a year and a half before it happened, of a victim escaping the cannibals to his grove and becoming his servant and pilot to the mainland.",
+      "tags": [
+        "temperament",
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-134",
+      "at": 1781033250,
+      "text": "Thirty savages danced at a fire while two victims were brought out; the second broke and ran his way — he cut off the two pursuers, clubbed one with his gun-stock and shot the other dead.",
+      "tags": [
+        "people/friday",
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-135",
+      "at": 1781033250,
+      "text": "The rescued man set his deliverer's foot upon his own head in token of service for ever; he buried both pursuers in the sand in a quarter hour and was hidden in the far cave, not the castle.",
+      "tags": [
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-136",
+      "at": 1781033250,
+      "text": "Named him Friday for the day of his rescue; taught him 'Master', 'Yes' and 'No', and fed him milk, bread and raisins.",
+      "tags": [
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-137",
+      "at": 1781033271,
+      "text": "At the feast-ground (three skulls, five hands, the ground dyed with blood) Friday signed that he was the fourth prisoner of a battle's spoils; all remains were burned to ashes, and Friday — still hankering after the flesh — was given to know he would be killed if he touched it.",
+      "tags": [
+        "people/friday",
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-138",
+      "at": 1781033271,
+      "text": "Friday thought the gun a god of death — felt his own body for the wound, and privately talked to the gun, asking it not to kill him.",
+      "tags": [
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-139",
+      "at": 1781033271,
+      "text": "The pleasantest year of all: Friday talks well now, his 'simple, unfeigned honesty' more visible daily — 'I began really to love the creature.'",
+      "tags": [
+        "people/friday",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-140",
+      "at": 1781033271,
+      "text": "Friday's intelligence: his nation also eats men taken in war; he himself had been at the NW shore once when twenty men, two women and a child were eaten; counted it in stones.",
+      "tags": [
+        "people/friday",
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-141",
+      "at": 1781033297,
+      "text": "Located himself at last by Friday's accounts: the island lies in the mouth of the Orinoco, the land to the west and northwest being Trinidad; Friday's people are Caribs, and bearded white men — Spaniards — dwell far west.",
+      "tags": [
+        "life/island",
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-142",
+      "at": 1781033297,
+      "text": "Friday's catechism stumped the master — 'if God much stronger, much might as the wicked devil, why God no kill the devil?' — and in teaching Friday he instructed himself; grief sat lighter, the habitation 'comfortable beyond measure'.",
+      "tags": [
+        "people/friday",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-143",
+      "at": 1781033297,
+      "text": "Friday revealed seventeen white men, saved from a wreck, living these four years among his nation under truce — surely the company of the Spanish ship lost off the island.",
+      "tags": [
+        "people/friday",
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-144",
+      "at": 1781033297,
+      "text": "Seeing his country across the water Friday danced for joy; weeks of jealousy followed ('he would come back with a hundred or two and feast upon me') which wronged 'the poor honest creature' utterly.",
+      "tags": [
+        "people/friday",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-145",
+      "at": 1781033297,
+      "text": "Offered to send Friday home alone, Friday fetched a hatchet: 'Take kill Friday, no send Friday away' — tears standing in his eyes; promised never to send him off.",
+      "tags": [
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-146",
+      "at": 1781033297,
+      "text": "Began a great launchable periagua with Friday — Friday chose the tree and learned tools over burning; finished handsome in a month's hard labour.",
+      "tags": [
+        "life/island",
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-147",
+      "at": 1781033321,
+      "text": "Launched the new escape boat on rollers (she'd carry twenty), rigged her over two months with cedar mast and a shoulder-of-mutton sail from twenty-six-year-old canvas.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-148",
+      "at": 1781033321,
+      "text": "Twenty-one savages landed near the creek with three prisoners; resolved against attack again mid-march — until he saw a bearded European among the victims; then battle: seventeen or eighteen of twenty-one killed between him, Friday, and the freed Spaniard.",
+      "tags": [
+        "life/island",
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-149",
+      "at": 1781033321,
+      "text": "The rescued Spaniard answered 'Christianus' — given pistol and sword 'he flew upon his murderers like a fury', killing the savage wrestling him with a pistol-shot from underneath.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-150",
+      "at": 1781033321,
+      "text": "The second bound prisoner in the canoe was Friday's own father: Friday kissed, embraced, cried, danced, sang, and ran himself ragged fetching water and bread — 'it would have made a Stoic smile'.",
+      "tags": [
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-151",
+      "at": 1781033345,
+      "text": "Settled the two invalids in a new tent between the walls — the island 'peopled' at last; Friday carried the Spaniard on his back to the boat.",
+      "tags": [
+        "life/island/dwelling",
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-152",
+      "at": 1781033345,
+      "text": "Heard the Spaniards' full story: sixteen more castaway Spaniards and Portuguese on the main, alive under truce but destitute; voiced his own fear of the Inquisition over any rescue into New Spain.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-153",
+      "at": 1781033345,
+      "text": "The harvest answered the plan: above two hundred and twenty bushels from twenty-two sown — store enough for all sixteen guests or a voyage to any part of America.",
+      "tags": [
+        "life/island/crops"
+      ]
+    },
+    {
+      "id": "ep-154",
+      "at": 1781033345,
+      "text": "Dispatched the Spaniard and Friday's father to the main by canoe (October full moon, year twenty-seven) with muskets, provisions and a sworn-contract charge — 'the first measures used by me in view of my deliverance'.",
+      "tags": [
+        "life/island",
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-155",
+      "at": 1781033345,
+      "text": "Eight days later Friday cried 'Master, they are come!' — but it was an English long-boat: eleven men, three of them prisoners, and the crew let their boat ground on the ooze while they rambled.",
+      "tags": [
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-156",
+      "at": 1781033364,
+      "text": "Appeared in his goatskins like a spectre to the three prisoners under the tree — 'What are ye, gentlemen?' — and struck the bargain: unconditional command, and passage to England free, for their rescue.",
+      "tags": [
+        "people/english-captain"
+      ]
+    },
+    {
+      "id": "ep-157",
+      "at": 1781033364,
+      "text": "The first counterstroke killed the two ringleaders (the captain's men firing, the captain finishing one with his musket-stock); the rest submitted and were bound or sworn in.",
+      "tags": [
+        "people/english-captain",
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-158",
+      "at": 1781033364,
+      "text": "Told the captain his whole history — the captain wept at being preserved on purpose; showed him the castle and called the bower 'a seat in the country, as most princes have'.",
+      "tags": [
+        "people/english-captain",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-159",
+      "at": 1781033364,
+      "text": "Ten more came ashore; the trap unwound by craft — boat stripped and holed, prisoners hidden in the secret cave with candles, Friday and the mate hallooing the search party hill to wood until dark exhausted them on an 'enchanted island'.",
+      "tags": [
+        "life/island",
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-160",
+      "at": 1781033396,
+      "text": "The ship was retaken at midnight — the boatswain shot dead ashore, the rebel captain killed on deck — and at the signal guns 'I was ready to sink down at the surprise of it': the ship was his.",
+      "tags": [
+        "people/english-captain",
+        "life/island"
+      ]
+    },
+    {
+      "id": "ep-161",
+      "at": 1781033396,
+      "text": "Played 'the governor' to the end; the captain clothed him head to foot (the clothes at first unbearable); the five worst mutineers chose the island over the gallows and were left his story, arms, and husbandry.",
+      "tags": [
+        "life/island",
+        "people/english-captain"
+      ]
+    },
+    {
+      "id": "ep-162",
+      "at": 1781033396,
+      "text": "Left the island 19 December 1686 — twenty-eight years, two months and nineteen days — delivered the same day of the month as from the Moors of Sallee; took the goatskin cap, the umbrella, a parrot, and the money.",
+      "tags": [
+        "life/island",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-163",
+      "at": 1781033396,
+      "text": "Landed in England 11 June 1687, thirty-five years a stranger: father and mother dead, family extinct but two sisters and two nephews; relieved the poor widow who had kept his money; the ship's owners presented near 200 pounds.",
+      "tags": [
+        "people/parents",
+        "money/trade"
+      ]
+    },
+    {
+      "id": "ep-164",
+      "at": 1781033419,
+      "text": "Found the old Portuguese captain at Lisbon — aged, ashore, his son in the trade; the old man owed an honest account and offered his last moidores; took only a hundred against a receipt, returned the rest.",
+      "tags": [
+        "people/portuguese-captain",
+        "money/trade"
+      ]
+    },
+    {
+      "id": "ep-165",
+      "at": 1781033419,
+      "text": "The plantation was alive and rich: accounts honestly kept by trustees, the Prior of St Augustine returning 872 undistributed moidores; the partner's letter came with twenty-two crosses of blessing, leopard skins, sweetmeats and gold.",
+      "tags": [
+        "work/plantation",
+        "money/trade"
+      ]
+    },
+    {
+      "id": "ep-166",
+      "at": 1781033419,
+      "text": "Wealth restored: above five thousand pounds sterling in hand and a Brazil estate yielding above a thousand pounds a year — 'the latter end of Job was better than the beginning'.",
+      "tags": [
+        "money/trade",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-167",
+      "at": 1781033419,
+      "text": "Refused the sea home on a strong inward aversion: of the two ships he had singled out, one was taken by Algerine pirates and the other lost at the Start with all but three drowned — the secret hint vindicated again.",
+      "tags": [
+        "temperament",
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-168",
+      "at": 1781033419,
+      "text": "Crossing the Pyrenees by land in deep snow, the guide was attacked by wolves and a bear; Friday shot the wolf off the man and famously played with the bear before killing it.",
+      "tags": [
+        "people/friday",
+        "life/voyages"
+      ]
+    },
+    {
+      "id": "ep-169",
+      "at": 1781033444,
+      "text": "Friday clowned with a Pyrenees bear — 'me make you good laugh' — danced it out along a bough, then shot it through the ear; 'so we kill bear in my country.'",
+      "tags": [
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-170",
+      "at": 1781033444,
+      "text": "Three hundred famished wolves charged the company on a snow plain (a rider's horse and the man half-eaten found before); behind a timber breastwork with volleys and a fired powder-train they killed threescore and broke the pack.",
+      "tags": [
+        "life/voyages",
+        "people/friday"
+      ]
+    },
+    {
+      "id": "ep-171",
+      "at": 1781033444,
+      "text": "Settled in England: married, three children (two sons, a daughter); widowed; in 1694 the sea pulled again — sailed with his nephew as private trader to the East Indies.",
+      "tags": [
+        "life",
+        "temperament"
+      ]
+    },
+    {
+      "id": "ep-172",
+      "at": 1781033444,
+      "text": "Revisited the island in 1694 as its proprietor: Spaniards and mutineers reconciled into a colony with some twenty children; left supplies, workmen, divided the lands (property of the whole reserved to himself), later sent women and cattle from Brazil.",
+      "tags": [
+        "life/island"
+      ]
+    }
+  ],
+  "leaves": {
+    "ague-illness": {
+      "id": "ague-illness",
+      "species": "state",
+      "text": "Down with a violent recurring ague: shivering fits, headaches, days abed, dangerously weak and alone.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032753
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-61",
+        "ep-62",
+        "ep-63"
+      ],
+      "created_at": 1781032753,
+      "updated_at": 1781032753
+    },
+    "back-in-england": {
+      "id": "back-in-england",
+      "species": "state",
+      "text": "Settled and prosperous in England: married with two sons and a daughter, then widowed; sailed again in 1694 with his nephew to the East Indies — the wandering never fully cured.",
+      "parents": [
+        "life"
+      ],
+      "salience": {
+        "importance": 0.9,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033444
+      },
+      "history": [
+        {
+          "value": "In England since 11 June 1687, thirty-five years absent and 'as perfect a stranger to all the world as if I had never been known there'; only two sisters and two of a brother's children survive; about 200 pounds from the grateful shipowners in hand.",
+          "superseded_at": 1781033444
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-160",
+        "ep-161",
+        "ep-162",
+        "ep-163",
+        "ep-169",
+        "ep-170",
+        "ep-171",
+        "ep-172"
+      ],
+      "created_at": 1781033396,
+      "updated_at": 1781033444
+    },
+    "barley-providence": {
+      "id": "barley-providence",
+      "species": "state",
+      "text": "The corn supply is established: about twenty bushels of barley and as much rice in store; eats bread freely and calibrates one year's sowing to one year's eating.",
+      "parents": [
+        "life/island/crops"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032936
+      },
+      "history": [
+        {
+          "value": "First crop: ten or twelve ears of English barley plus rice stalks, sprung from the shaken-out feed bag under the rock; every grain saved for re-sowing (ears ripened about end of June).",
+          "superseded_at": 1781032916
+        },
+        {
+          "value": "Cropline established: from half a peck of seed, near two bushels rice and two and a half barley (December, year two), all reserved for seed; the goal is a constant bread supply.",
+          "superseded_at": 1781032936
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-54",
+        "ep-55",
+        "ep-56",
+        "ep-57",
+        "ep-83",
+        "ep-84",
+        "ep-85",
+        "ep-86",
+        "ep-87",
+        "ep-88",
+        "ep-89",
+        "ep-90",
+        "ep-91"
+      ],
+      "created_at": 1781032696,
+      "updated_at": 1781032936
+    },
+    "boat-stores": {
+      "id": "boat-stores",
+      "species": "state",
+      "text": "The escape boat carries biscuit, water jars, the patron's bottle case, half a hundredweight of beeswax, twine, hatchet, saw, hammer, three fowling-pieces with powder and shot.",
+      "parents": [
+        "life/voyages"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032346
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-14",
+        "ep-15",
+        "ep-16"
+      ],
+      "created_at": 1781032346,
+      "updated_at": 1781032346
+    },
+    "books-instruments": {
+      "id": "books-instruments",
+      "species": "state",
+      "text": "Salvaged pens, ink and paper (husbanded — ink will not last), compasses, mathematical instruments, charts, navigation books, three good English Bibles and some Portuguese books.",
+      "parents": [
+        "life/island/stores"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 2,
+        "contradict": 0,
+        "last_event_at": 1781032602
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-45",
+        "ep-46",
+        "ep-47",
+        "ep-48",
+        "ep-49",
+        "ep-50"
+      ],
+      "created_at": 1781032577,
+      "updated_at": 1781032602
+    },
+    "born-york-1632": {
+      "id": "born-york-1632",
+      "species": "state",
+      "text": "Born in 1632 in the city of York, third son of a merchant from Bremen who settled at Hull.",
+      "parents": [
+        "life/origins"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032205
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-1",
+        "ep-2"
+      ],
+      "created_at": 1781032205,
+      "updated_at": 1781032205
+    },
+    "brazil-plantation": {
+      "id": "brazil-plantation",
+      "species": "state",
+      "text": "The plantation survived and prospered in honest hands: accounts restored, partner overjoyed; the estate yields over a thousand pounds a year, with above five thousand pounds in hand — the Brazil claim fully recovered without going in person.",
+      "parents": [
+        "work/plantation"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033419
+      },
+      "history": [
+        {
+          "value": "Owns a Brazil plantation next to Wells: two years of food crops, tobacco in the third, ground readied for sugar canes.",
+          "superseded_at": 1781032437
+        },
+        {
+          "value": "Plantation thriving in its fourth year: fifty hundredweight rolls of cured tobacco laid by, three servants (a bonded Lisbon servant, a negro slave, a European), well beyond neighbour Wells.",
+          "superseded_at": 1781033396
+        },
+        {
+          "value": "The Brazil plantation's fate is unknown after twenty-eight years — bound for Lisbon to learn what became of it.",
+          "superseded_at": 1781033419
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-23",
+        "ep-24",
+        "ep-25",
+        "ep-26",
+        "ep-27",
+        "ep-28",
+        "ep-160",
+        "ep-161",
+        "ep-162",
+        "ep-163",
+        "ep-164",
+        "ep-165",
+        "ep-166",
+        "ep-167",
+        "ep-168"
+      ],
+      "created_at": 1781032410,
+      "updated_at": 1781033419
+    },
+    "brazil-stock": {
+      "id": "brazil-stock",
+      "species": "state",
+      "text": "Half the London stock (100 pounds) came over as goods and sold at four times value; the other 100 pounds remains with the widow in London.",
+      "parents": [
+        "money/trade"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032437
+      },
+      "history": [
+        {
+          "value": "Landed in Brazil with about 220 pieces of eight from his cargo; roughly 200 pounds remains with the widow in London.",
+          "superseded_at": 1781032437
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-23",
+        "ep-24",
+        "ep-25",
+        "ep-26",
+        "ep-27",
+        "ep-28"
+      ],
+      "created_at": 1781032410,
+      "updated_at": 1781032437
+    },
+    "bread-ration": {
+      "id": "bread-ration",
+      "species": "state",
+      "text": "Bakes his own barley loaves, rice cakes and puddings on an ember hearth under clay pans; ship's bread long gone.",
+      "parents": [
+        "life/island/stores"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032936
+      },
+      "history": [
+        {
+          "value": "Ship's bread is running low: rationed to one biscuit cake a day, 'which made my heart very heavy'.",
+          "superseded_at": 1781032936
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-58",
+        "ep-59",
+        "ep-60",
+        "ep-88",
+        "ep-89",
+        "ep-90",
+        "ep-91"
+      ],
+      "created_at": 1781032724,
+      "updated_at": 1781032936
+    },
+    "cannibal-landings": {
+      "id": "cannibal-landings",
+      "species": "state",
+      "text": "The SW shore is a cannibal landing place: mainland war parties bring prisoners there to kill and eat — but they never range inland, and in near eighteen years never crossed to his side.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.9,
+        "retrieval_count": 2,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033144
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-117",
+        "ep-118",
+        "ep-119"
+      ],
+      "created_at": 1781033144,
+      "updated_at": 1781033144
+    },
+    "cannibal-policy": {
+      "id": "cannibal-policy",
+      "species": "state",
+      "text": "The no-attack policy bent to providence: blood was shed at last not in massacre but to save a single victim — self-preservation and a clear call together.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033250
+      },
+      "history": [
+        {
+          "value": "Settled policy toward the savages: no attack unless attacked or discovered — neither in principle (no right to judge them) nor in policy (revenge by thousands); concealment above all.",
+          "superseded_at": 1781033250
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-120",
+        "ep-121",
+        "ep-133",
+        "ep-134",
+        "ep-135",
+        "ep-136"
+      ],
+      "created_at": 1781033160,
+      "updated_at": 1781033250
+    },
+    "captain-benefactor": {
+      "id": "captain-benefactor",
+      "species": "state",
+      "text": "The old Portuguese captain, aged and ashore at Lisbon, remains his honest steward and 'old patron' — channel for all Brazil remittances; repaid and rewarded.",
+      "parents": [
+        "people/portuguese-captain"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033419
+      },
+      "history": [
+        {
+          "value": "The Portuguese captain is a trusted standing benefactor: rescued him gratis, paid fairly for boat and skins, and manages his affairs honestly.",
+          "superseded_at": 1781033419
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-23",
+        "ep-24",
+        "ep-25",
+        "ep-26",
+        "ep-164",
+        "ep-165",
+        "ep-166",
+        "ep-167",
+        "ep-168"
+      ],
+      "created_at": 1781032410,
+      "updated_at": 1781033419
+    },
+    "clothing": {
+      "id": "clothing",
+      "species": "state",
+      "text": "Dresses wholly in goatskins now — high hair-out cap, waistcoat, open-kneed breeches — and carries a collapsible goatskin umbrella against sun and rain.",
+      "parents": [
+        "life/island/stores"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033014
+      },
+      "history": [
+        {
+          "value": "Lives in salvaged chequered shirts (near three dozen saved) and always a hat against the blistering sun; waistcoats worn out, botching jackets from seamen's watch-coats.",
+          "superseded_at": 1781033014
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-96",
+        "ep-97",
+        "ep-98",
+        "ep-99",
+        "ep-100"
+      ],
+      "created_at": 1781032996,
+      "updated_at": 1781033014
+    },
+    "coin-hoard": {
+      "id": "coin-hoard",
+      "species": "state",
+      "text": "The useless treasury has grown: the old thirty-six pounds plus near twelve hundred pieces of eight, six gold doubloons and small gold wedges from the Spanish wreck, all laid up in the cave.",
+      "parents": [
+        "life/island/stores",
+        "money"
+      ],
+      "salience": {
+        "importance": 0.4,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033226
+      },
+      "history": [
+        {
+          "value": "Thirty-six pounds in mixed coin (European, Brazil, pieces of eight, gold and silver) salvaged from the wreck, useless on the island.",
+          "superseded_at": 1781032977
+        },
+        {
+          "value": "The thirty-six pounds of coin lies mouldering in a cave drawer — he would give it all for sixpence of garden seed or a bottle of ink.",
+          "superseded_at": 1781033226
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-37",
+        "ep-38",
+        "ep-39",
+        "ep-40",
+        "ep-95",
+        "ep-130",
+        "ep-131",
+        "ep-132"
+      ],
+      "created_at": 1781032530,
+      "updated_at": 1781033226
+    },
+    "contentment": {
+      "id": "contentment",
+      "species": "disposition",
+      "text": "Reconciled and content with his condition.",
+      "parents": [
+        "temperament"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 14,
+        "contradict": 0,
+        "last_event_at": 1781033271
+      },
+      "history": [],
+      "axis": 0.033238396,
+      "nudges": [
+        {
+          "dir": 1,
+          "note": "Brought his mind 'to relish my condition' and gave over watching the sea.",
+          "at": 1781032602
+        },
+        {
+          "dir": -1,
+          "note": "The fear of being swallowed alive left him never sleeping in quiet.",
+          "at": 1781032724
+        },
+        {
+          "dir": 1,
+          "note": "'Much easier to my mind... a great deal of comfort within, which till now I knew nothing of.'",
+          "at": 1781032815
+        },
+        {
+          "dir": 1,
+          "note": "Left off 'afflicting myself with fruitless wishes' at the sight of other land.",
+          "at": 1781032872
+        },
+        {
+          "dir": 1,
+          "note": "'Possible for me to be more happy in this forsaken, solitary condition than in any other state in the world.'",
+          "at": 1781032916
+        },
+        {
+          "dir": 1,
+          "note": "Nothing to covet: 'I had all that I was now capable of enjoying.'",
+          "at": 1781032960
+        },
+        {
+          "dir": 1,
+          "note": "'All our discontents about what we want spring from the want of thankfulness for what we have.'",
+          "at": 1781032977
+        },
+        {
+          "dir": 1,
+          "note": "From the runaway current the island became 'the most pleasant place in the world'.",
+          "at": 1781033041
+        },
+        {
+          "dir": -1,
+          "note": "The footprint replaced composure with terror at every bush and stump.",
+          "at": 1781033092
+        },
+        {
+          "dir": -1,
+          "note": "The man who longed for society now trembles at the shadow of a man.",
+          "at": 1781033109
+        },
+        {
+          "dir": 1,
+          "note": "Naturalised in year twenty-three: 'could have been content to have capitulated for spending the rest of my time there' but for the savages.",
+          "at": 1781033183
+        },
+        {
+          "dir": -1,
+          "note": "Society-hunger surfaced violently: clenched hands and grinding teeth at the thought of 'but one soul saved'.",
+          "at": 1781033206
+        },
+        {
+          "dir": -1,
+          "note": "'All my calm of mind, in my resignation to Providence, seemed to be suspended.'",
+          "at": 1781033226
+        },
+        {
+          "dir": 1,
+          "note": "With Friday, 'could I but have been safe from more savages, I cared not if I was never to remove'.",
+          "at": 1781033271
+        }
+      ],
+      "evidence": [
+        "ep-48",
+        "ep-49",
+        "ep-50"
+      ],
+      "created_at": 1781032602,
+      "updated_at": 1781033271
+    },
+    "corn-reserve-policy": {
+      "id": "corn-reserve-policy",
+      "species": "state",
+      "text": "Policy after the footprint: keep two or three years' corn in store ahead, against any interruption of a crop.",
+      "parents": [
+        "life/island/crops"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033109
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-112",
+        "ep-113",
+        "ep-114"
+      ],
+      "created_at": 1781033109,
+      "updated_at": 1781033109
+    },
+    "country-bower": {
+      "id": "country-bower",
+      "species": "state",
+      "text": "Keeps a second seat — the bower or country house in the vale: tent within a double hedge, visited for days at a time; the sea-coast fortress stays the main dwelling.",
+      "parents": [
+        "life/island/dwelling"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032872
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-74",
+        "ep-75",
+        "ep-76",
+        "ep-77"
+      ],
+      "created_at": 1781032872,
+      "updated_at": 1781032872
+    },
+    "daily-routine": {
+      "id": "daily-routine",
+      "species": "state",
+      "text": "Daily order now: scripture and duty to God thrice daily, the gun three morning hours, ordering and cooking the take, work in the cool evening hours.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032916
+      },
+      "history": [
+        {
+          "value": "Daily order: morning walk with the gun (seldom returns empty-handed), work till eleven, eat, sleep through the noon heat till two, evening work.",
+          "superseded_at": 1781032916
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-51",
+        "ep-52",
+        "ep-53",
+        "ep-83",
+        "ep-84",
+        "ep-85",
+        "ep-86",
+        "ep-87"
+      ],
+      "created_at": 1781032653,
+      "updated_at": 1781032916
+    },
+    "dwelling-now": {
+      "id": "dwelling-now",
+      "species": "state",
+      "text": "The castle is a fortress in depth: double walls (the outer ten feet thick, seven mounted muskets at ports), the whole hidden inside a planted wood grown impassable; multi-chambered caves behind.",
+      "parents": [
+        "life/island/dwelling"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033126
+      },
+      "history": [
+        {
+          "value": "Living in a tent of sail-canvas and poles by the landing cove, ringed with chests and casks, pistols at his head.",
+          "superseded_at": 1781032548
+        },
+        {
+          "value": "Home is now the fortress: a tent (double, tarpaulin-roofed) on a sheltered plain under a steep rock, ringed by a stake-and-cable fence entered by ladder, with a dug cave 'cellar' behind; sleeps in the mate's hammock.",
+          "superseded_at": 1781032602
+        },
+        {
+          "value": "The fortress matured: turf wall two feet thick against the pale, rafters and thatch against the rains, the cave enlarged with shelves and a hidden back door through the rock; table, chair, everything in its place.",
+          "superseded_at": 1781033126
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-37",
+        "ep-38",
+        "ep-39",
+        "ep-40",
+        "ep-41",
+        "ep-42",
+        "ep-43",
+        "ep-44",
+        "ep-48",
+        "ep-49",
+        "ep-50",
+        "ep-115",
+        "ep-116"
+      ],
+      "created_at": 1781032530,
+      "updated_at": 1781033126
+    },
+    "elder-brothers": {
+      "id": "elder-brothers",
+      "species": "state",
+      "text": "Two elder brothers: one, a lieutenant-colonel of foot, killed at Dunkirk against the Spaniards; the other vanished without trace.",
+      "parents": [
+        "life/origins",
+        "people"
+      ],
+      "salience": {
+        "importance": 0.4,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032205
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-1",
+        "ep-2"
+      ],
+      "created_at": 1781032205,
+      "updated_at": 1781032205
+    },
+    "english-ship-arrived": {
+      "id": "english-ship-arrived",
+      "species": "state",
+      "text": "The mutiny is breaking: ringleaders dead or bound, the long-boat seized and holed, the shore party exhausted and stranded in the dark; seven well-armed men stand with him to retake the ship anchored offshore.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.9,
+        "retrieval_count": 2,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033364
+      },
+      "history": [
+        {
+          "value": "An English ship stands off the island and her long-boat is ashore: eleven men, three of them bound prisoners — a mutiny by all appearances; the boat lies grounded till high water.",
+          "superseded_at": 1781033364
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-151",
+        "ep-152",
+        "ep-153",
+        "ep-154",
+        "ep-155",
+        "ep-156",
+        "ep-157",
+        "ep-158",
+        "ep-159"
+      ],
+      "created_at": 1781033345,
+      "updated_at": 1781033364
+    },
+    "enslaved-sallee": {
+      "id": "enslaved-sallee",
+      "species": "state",
+      "text": "Free of Sallee: escaped after two years in the patron's longboat, now coasting south along Barbary with Xury.",
+      "parents": [
+        "life/slavery-sallee"
+      ],
+      "salience": {
+        "importance": 0.9,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032346
+      },
+      "history": [
+        {
+          "value": "Currently enslaved at Sallee, kept by the rover captain as his prize; left ashore to garden and mind the ship when the patron cruises.",
+          "superseded_at": 1781032346
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-10",
+        "ep-11",
+        "ep-12",
+        "ep-13",
+        "ep-14",
+        "ep-15",
+        "ep-16"
+      ],
+      "created_at": 1781032317,
+      "updated_at": 1781032346
+    },
+    "escape-boat": {
+      "id": "escape-boat",
+      "species": "state",
+      "text": "A proper escape boat is launched and rigged at last: big enough for twenty, mast, mainsail, foresail, anchor of sorts — built with Friday and launchable from the creek.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033321
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-147",
+        "ep-148",
+        "ep-149",
+        "ep-150"
+      ],
+      "created_at": 1781033321,
+      "updated_at": 1781033321
+    },
+    "faith-practice": {
+      "id": "faith-practice",
+      "species": "state",
+      "text": "Keeps a religious practice now: Bible reading begun (the 'Call on Me' promise much mused on) and kneeling prayer.",
+      "parents": [
+        "life"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 2,
+        "contradict": 0,
+        "last_event_at": 1781032815
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-67",
+        "ep-68",
+        "ep-69",
+        "ep-70",
+        "ep-71",
+        "ep-72",
+        "ep-73"
+      ],
+      "created_at": 1781032792,
+      "updated_at": 1781032815
+    },
+    "family-name-crusoe": {
+      "id": "family-name-crusoe",
+      "species": "state",
+      "text": "Family name was Kreutznaer, corrupted in England to Crusoe; mother's family were the Robinsons of York.",
+      "parents": [
+        "life/origins"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032205
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-1",
+        "ep-2"
+      ],
+      "created_at": 1781032205,
+      "updated_at": 1781032205
+    },
+    "fatalism": {
+      "id": "fatalism",
+      "species": "disposition",
+      "text": "Reads his own course as driven by an irresistible fate or secret decree.",
+      "parents": [
+        "temperament"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 4,
+        "contradict": 0,
+        "last_event_at": 1781033396
+      },
+      "history": [],
+      "axis": 0.68359375,
+      "nudges": [
+        {
+          "dir": 1,
+          "note": "Describes an 'obstinacy nothing could resist', a 'secret overruling decree' hurrying him to his own destruction.",
+          "at": 1781032286
+        },
+        {
+          "dir": 1,
+          "note": "Marked sailing 'in an evil hour' on the fatal anniversary of leaving Hull.",
+          "at": 1781032462
+        },
+        {
+          "dir": 1,
+          "note": "The concurrence of fatal days catalogued with wonder.",
+          "at": 1781032996
+        },
+        {
+          "dir": 1,
+          "note": "Delivered from the second captivity the same day of the month as from Sallee.",
+          "at": 1781033396
+        }
+      ],
+      "evidence": [
+        "ep-7",
+        "ep-8",
+        "ep-9"
+      ],
+      "created_at": 1781032286,
+      "updated_at": 1781033396
+    },
+    "father-design-law": {
+      "id": "father-design-law",
+      "species": "state",
+      "text": "Father and mother died during the island years, never knowing he lived; the prophecy outlived the prophet.",
+      "parents": [
+        "people/parents"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033396
+      },
+      "history": [
+        {
+          "value": "Father designed him for the law and offered to set him up at home; refused all consent for the sea.",
+          "superseded_at": 1781033396
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-1",
+        "ep-2",
+        "ep-160",
+        "ep-161",
+        "ep-162",
+        "ep-163"
+      ],
+      "created_at": 1781032205,
+      "updated_at": 1781033396
+    },
+    "first-canoe": {
+      "id": "first-canoe",
+      "species": "state",
+      "text": "A huge cedar periagua lies finished but unlaunchable, a hundred yards uphill from the creek — a monument to not counting the cost.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032960
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-92",
+        "ep-93",
+        "ep-94"
+      ],
+      "created_at": 1781032960,
+      "updated_at": 1781032960
+    },
+    "first-voyage-1651": {
+      "id": "first-voyage-1651",
+      "species": "state",
+      "text": "First voyage began 1 September 1651: Hull to London, taken without parental knowledge or blessing.",
+      "parents": [
+        "life/voyages"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032238
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-3",
+        "ep-4",
+        "ep-5",
+        "ep-6"
+      ],
+      "created_at": 1781032238,
+      "updated_at": 1781032238
+    },
+    "footprint-terror": {
+      "id": "footprint-terror",
+      "species": "state",
+      "text": "The footprint is explained: savages do come — to the far SW shore, for their feasts, never to stay; concealment, not flight, is the policy. The fortress-name 'castle' remains.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.9,
+        "retrieval_count": 2,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033144
+      },
+      "history": [
+        {
+          "value": "A single naked footprint on the sand (about year fifteen) ended the island's safety: someone — most likely mainland savages — has been ashore. He calls the fortress 'my castle' ever after.",
+          "superseded_at": 1781033144
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-110",
+        "ep-111",
+        "ep-112",
+        "ep-113",
+        "ep-114",
+        "ep-117",
+        "ep-118",
+        "ep-119"
+      ],
+      "created_at": 1781033092,
+      "updated_at": 1781033144
+    },
+    "friday-nation": {
+      "id": "friday-nation",
+      "species": "state",
+      "text": "Friday's nation lives on the mainland, eats war-prisoners too, and uses the island's NW shore for feasts; the crossing is short and safe by canoe with the right current.",
+      "parents": [
+        "people/friday",
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033473
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033271
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-137",
+        "ep-138",
+        "ep-139",
+        "ep-140"
+      ],
+      "created_at": 1781033271,
+      "updated_at": 1781033271
+    },
+    "friday-rescued": {
+      "id": "friday-rescued",
+      "species": "state",
+      "text": "Friday is a Christian now and a fast friend proved beyond jealousy — 'take kill Friday, no send Friday away'; the escape plan is a joint one, by new canoe toward the mainland and the seventeen Spaniards.",
+      "parents": [
+        "people/friday"
+      ],
+      "salience": {
+        "importance": 0.9,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033473
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033297
+      },
+      "history": [
+        {
+          "value": "Friday — about twenty-six, tall, dun olive-skinned, quick-eyed, sweet-countenanced — is his servant and first human company in some twenty-five years; lodged at first in the far cave, being taught English.",
+          "superseded_at": 1781033271
+        },
+        {
+          "value": "Friday speaks English well now, knows every household name and errand; honest, merry, diligent — genuinely loved, and loving in return; weaned (by threat and by kid-meat) from cannibal appetite.",
+          "superseded_at": 1781033297
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-133",
+        "ep-134",
+        "ep-135",
+        "ep-136",
+        "ep-137",
+        "ep-138",
+        "ep-139",
+        "ep-140",
+        "ep-141",
+        "ep-142",
+        "ep-143",
+        "ep-144",
+        "ep-145",
+        "ep-146"
+      ],
+      "created_at": 1781033250,
+      "updated_at": 1781033297
+    },
+    "fridays-father": {
+      "id": "fridays-father",
+      "species": "state",
+      "text": "Friday's father, rescued from the same feast as the Spaniard, lives with them — Friday's devotion to him is total.",
+      "parents": [
+        "people/friday",
+        "people"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033473
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033321
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-147",
+        "ep-148",
+        "ep-149",
+        "ep-150"
+      ],
+      "created_at": 1781033321,
+      "updated_at": 1781033321
+    },
+    "goat-flock": {
+      "id": "goat-flock",
+      "species": "state",
+      "text": "The flock is split for safety: the main herd at the bower enclosures plus a hidden reserve of twelve in a fenced three-acre wood clearing; dairy still running.",
+      "parents": [
+        "life/island/animals"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033126
+      },
+      "history": [
+        {
+          "value": "Keeps a tame flock of forty-three goats and growing, in five fenced pieces with pens and gates; the dairy gives up to a gallon or two of milk a day, with his own butter, cheese and salt.",
+          "superseded_at": 1781033126
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-104",
+        "ep-105",
+        "ep-106",
+        "ep-107",
+        "ep-108",
+        "ep-109",
+        "ep-115",
+        "ep-116"
+      ],
+      "created_at": 1781033067,
+      "updated_at": 1781033126
+    },
+    "guinea-slaving-venture": {
+      "id": "guinea-slaving-venture",
+      "species": "state",
+      "text": "The Guinea slaving venture ended in hurricane and wreck off South America before ever reaching Africa.",
+      "parents": [
+        "life/voyages",
+        "money/trade"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032462
+      },
+      "history": [
+        {
+          "value": "Committed to sail as supercargo on a secret Guinea slaving voyage for an equal share of the negroes, providing no stock.",
+          "superseded_at": 1781032462
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-27",
+        "ep-28",
+        "ep-29",
+        "ep-30",
+        "ep-31"
+      ],
+      "created_at": 1781032437,
+      "updated_at": 1781032462
+    },
+    "guinea-trader": {
+      "id": "guinea-trader",
+      "species": "state",
+      "text": "Set up as a Guinea trader: first voyage turned 40 pounds into nearly 300; about 200 pounds left lodged with the late captain's widow in London.",
+      "parents": [
+        "money/trade"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032317
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-10",
+        "ep-11",
+        "ep-12",
+        "ep-13"
+      ],
+      "created_at": 1781032317,
+      "updated_at": 1781032317
+    },
+    "heeds-counsel": {
+      "id": "heeds-counsel",
+      "species": "disposition",
+      "text": "Heeds counsel and warnings before acting.",
+      "parents": [
+        "temperament"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 7,
+        "contradict": 0,
+        "last_event_at": 1781033160
+      },
+      "history": [],
+      "axis": 0.2897339,
+      "nudges": [
+        {
+          "dir": -1,
+          "note": "Sincere resolution after father's tearful discourse wore off within days.",
+          "at": 1781032205
+        },
+        {
+          "dir": -1,
+          "note": "Abandoned solemn storm resolutions within a day; called returning conscience 'fits' to be mastered.",
+          "at": 1781032238
+        },
+        {
+          "dir": -1,
+          "note": "Ignored two 'visible instructions' and the Jonah warning; pressed on instead of returning to Hull.",
+          "at": 1781032286
+        },
+        {
+          "dir": -1,
+          "note": "Obeyed 'the dictates of my fancy rather than my reason' against the clearest views of his own good.",
+          "at": 1781032437
+        },
+        {
+          "dir": 1,
+          "note": "Finally owned his father's counsel as the rejected voice of Providence.",
+          "at": 1781032773
+        },
+        {
+          "dir": 1,
+          "note": "Learned on the unlaunchable canoe to count the cost before beginning.",
+          "at": 1781032960
+        },
+        {
+          "dir": 1,
+          "note": "Debated himself to a full stop before acting — a changed man from the boy who fled Hull.",
+          "at": 1781033160
+        }
+      ],
+      "evidence": [
+        "ep-1",
+        "ep-2"
+      ],
+      "created_at": 1781032205,
+      "updated_at": 1781033160
+    },
+    "ink-failing": {
+      "id": "ink-failing",
+      "species": "state",
+      "text": "The ink is gone — eked out with water to nothing; the journal has ended, dates kept only by the post.",
+      "parents": [
+        "life/island/stores"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032996
+      },
+      "history": [
+        {
+          "value": "Ink is failing: the journal now records only the most remarkable events.",
+          "superseded_at": 1781032996
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-74",
+        "ep-75",
+        "ep-76",
+        "ep-77",
+        "ep-96",
+        "ep-97"
+      ],
+      "created_at": 1781032872,
+      "updated_at": 1781032996
+    },
+    "island-colony": {
+      "id": "island-colony",
+      "species": "state",
+      "text": "The island is his colony now: Spaniards and Englishmen with wives and some twenty children, supplied with tools, arms, cattle and women; lands divided among them, the property of the whole reserved to him.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033444
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-169",
+        "ep-170",
+        "ep-171",
+        "ep-172"
+      ],
+      "created_at": 1781033444,
+      "updated_at": 1781033444
+    },
+    "island-geography": {
+      "id": "island-geography",
+      "species": "state",
+      "text": "The land is an island, seemingly barren and uninhabited, with abundant unknown fowl; two smaller islands lie about three leagues to the west.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032497
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-35",
+        "ep-36"
+      ],
+      "created_at": 1781032497,
+      "updated_at": 1781032497
+    },
+    "island-goats": {
+      "id": "island-goats",
+      "species": "state",
+      "text": "There are wild goats on the island, shy and swift.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032548
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-41",
+        "ep-42",
+        "ep-43",
+        "ep-44"
+      ],
+      "created_at": 1781032548,
+      "updated_at": 1781032548
+    },
+    "island-interior": {
+      "id": "island-interior",
+      "species": "state",
+      "text": "The interior holds a fresh brook, savannah meadows with wild tobacco and imperfect sugar-canes, and a garden-like western vale of wild cocoa, orange, lemon and citron trees and abundant grapes.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032815
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-70",
+        "ep-71",
+        "ep-72",
+        "ep-73"
+      ],
+      "created_at": 1781032815,
+      "updated_at": 1781032815
+    },
+    "island-location": {
+      "id": "island-location",
+      "species": "state",
+      "text": "The island lies in the gulf of the Orinoco's mouth; the great island to the WNW is Trinidad; Friday's Carib nation is on the main, and seventeen Spaniards live there under truce, four years since their wreck.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033297
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-141",
+        "ep-142",
+        "ep-143",
+        "ep-144",
+        "ep-145",
+        "ep-146"
+      ],
+      "created_at": 1781033297,
+      "updated_at": 1781033297
+    },
+    "island-name": {
+      "id": "island-name",
+      "species": "state",
+      "text": "He named it 'The Island of Despair'.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032602
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-48",
+        "ep-49",
+        "ep-50"
+      ],
+      "created_at": 1781032602,
+      "updated_at": 1781032602
+    },
+    "island-pets": {
+      "id": "island-pets",
+      "species": "state",
+      "text": "Poll has been with him twenty-six years (two lesser talking parrots besides); the dog died at sixteen years; a few favourite cats (kittens drowned), household kids, and tame clipped sea-fowl in the grove.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033183
+      },
+      "history": [
+        {
+          "value": "Has the ship's dog — a trusty servant who swam ashore himself — and two cats; the dog gives every service but talk.",
+          "superseded_at": 1781033067
+        },
+        {
+          "value": "The dog is old and crazy now; the original cats are dead and buried, two tame descendants kept while the wild cat-brood was shot off.",
+          "superseded_at": 1781033183
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-45",
+        "ep-46",
+        "ep-47",
+        "ep-104",
+        "ep-105",
+        "ep-106",
+        "ep-107",
+        "ep-108",
+        "ep-109",
+        "ep-122",
+        "ep-123",
+        "ep-124",
+        "ep-125"
+      ],
+      "created_at": 1781032577,
+      "updated_at": 1781033183
+    },
+    "land-in-sight": {
+      "id": "land-in-sight",
+      "species": "state",
+      "text": "High land lies west, fifteen or twenty leagues off — likely Spanish America or the savage coast between it and Brazil, where cannibals devour all who fall into their hands.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032872
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-78",
+        "ep-79",
+        "ep-80",
+        "ep-81",
+        "ep-82"
+      ],
+      "created_at": 1781032872,
+      "updated_at": 1781032872
+    },
+    "landing-date": {
+      "id": "landing-date",
+      "species": "state",
+      "text": "First set foot on the island 30 September 1659, by observation about latitude 9 degrees 22 minutes north; keeps the reckoning by a notched calendar post.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.9,
+        "retrieval_count": 2,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032577
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-45",
+        "ep-46",
+        "ep-47"
+      ],
+      "created_at": 1781032577,
+      "updated_at": 1781032577
+    },
+    "navigation-skill": {
+      "id": "navigation-skill",
+      "species": "state",
+      "text": "Learned mathematics, navigation, course-keeping and observation from the Guinea captain; became a competent sailor and merchant.",
+      "parents": [
+        "work",
+        "life/voyages"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032317
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-10",
+        "ep-11",
+        "ep-12",
+        "ep-13"
+      ],
+      "created_at": 1781032317,
+      "updated_at": 1781032317
+    },
+    "parrot-poll": {
+      "id": "parrot-poll",
+      "species": "state",
+      "text": "Poll the parrot speaks — knows his own name and calls his master's familiarly.",
+      "parents": [
+        "life/island/animals"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032936
+      },
+      "history": [
+        {
+          "value": "Keeps a young parrot, taken to be taught to speak.",
+          "superseded_at": 1781032936
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-78",
+        "ep-79",
+        "ep-80",
+        "ep-81",
+        "ep-82",
+        "ep-88",
+        "ep-89",
+        "ep-90",
+        "ep-91"
+      ],
+      "created_at": 1781032872,
+      "updated_at": 1781032936
+    },
+    "piety": {
+      "id": "piety",
+      "species": "disposition",
+      "text": "Grounded in religious faith; reads events as providence.",
+      "parents": [
+        "temperament"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 25,
+        "contradict": 0,
+        "last_event_at": 1781033419
+      },
+      "history": [],
+      "axis": 0.8687979,
+      "nudges": [
+        {
+          "dir": -1,
+          "note": "Dismissed father's warning that God would not bless the venture.",
+          "at": 1781032205
+        },
+        {
+          "dir": -1,
+          "note": "Drowned storm-bred vows to God in punch one night later.",
+          "at": 1781032238
+        },
+        {
+          "dir": -1,
+          "note": "Saw the hand of Heaven in enslavement only as fulfilled doom, not as call to change.",
+          "at": 1781032317
+        },
+        {
+          "dir": 1,
+          "note": "First act ashore was thanking God for deliverance 'out of the very grave'.",
+          "at": 1781032475
+        },
+        {
+          "dir": 1,
+          "note": "Checked despair by counting providence's mercies — singled out alive of eleven, the ship driven within reach.",
+          "at": 1781032577
+        },
+        {
+          "dir": 1,
+          "note": "The good-evil account credits deliverance and provision to God.",
+          "at": 1781032602
+        },
+        {
+          "dir": -1,
+          "note": "Let Sabbath-keeping lapse once the marks were forgotten.",
+          "at": 1781032653
+        },
+        {
+          "dir": -1,
+          "note": "Tears at the 'miracle' of barley, but thankfulness abated as soon as the natural cause appeared.",
+          "at": 1781032696
+        },
+        {
+          "dir": -1,
+          "note": "Through the earthquake, 'not the least serious religious thought' beyond a rote Lord-have-mercy that left with the danger.",
+          "at": 1781032724
+        },
+        {
+          "dir": 1,
+          "note": "Sickness drove the first real prayer since the Hull storm, confused as it was.",
+          "at": 1781032753
+        },
+        {
+          "dir": 1,
+          "note": "The dream of the flaming man and the fever woke a sleeping conscience: real prayer and the first blessed meal.",
+          "at": 1781032773
+        },
+        {
+          "dir": 1,
+          "note": "First kneeling prayer of his life; scripture promise taken personally.",
+          "at": 1781032792
+        },
+        {
+          "dir": 1,
+          "note": "True repentance prayer; deliverance from sin now outweighs deliverance from the island.",
+          "at": 1781032815
+        },
+        {
+          "dir": 1,
+          "note": "Anniversary kept as a fast; Sabbath restored.",
+          "at": 1781032872
+        },
+        {
+          "dir": 1,
+          "note": "Scripture thrice daily; refused even a comfortable hypocrisy in prayer.",
+          "at": 1781032916
+        },
+        {
+          "dir": 1,
+          "note": "Counted his feeding 'by a long series of miracles' like Elijah's ravens; repentance believed accepted.",
+          "at": 1781032996
+        },
+        {
+          "dir": -1,
+          "note": "'My fear banished all my religious hope' — for a season.",
+          "at": 1781033109
+        },
+        {
+          "dir": -1,
+          "note": "Two years of dread left him 'seldom in a due temper for application to my Maker'.",
+          "at": 1781033126
+        },
+        {
+          "dir": 1,
+          "note": "Flood-of-tears thanksgiving that his lot differed from the cannibals'; thankfulness-by-comparison doctrine.",
+          "at": 1781033144
+        },
+        {
+          "dir": 1,
+          "note": "Obeys 'secret hints of Providence' as standing doctrine; thanks given for being kept from murder.",
+          "at": 1781033183
+        },
+        {
+          "dir": 1,
+          "note": "Treats the irresistible impression to board the wreck as 'invisible direction' to be obeyed.",
+          "at": 1781033206
+        },
+        {
+          "dir": 1,
+          "note": "'Plainly called by Providence to save this poor creature's life' — the dream made real.",
+          "at": 1781033250
+        },
+        {
+          "dir": 1,
+          "note": "Wrestled honestly with why saving knowledge is hidden from millions, and shut it up in the potter's clay.",
+          "at": 1781033271
+        },
+        {
+          "dir": 1,
+          "note": "Teaching Friday redemption taught the teacher; thankfulness that Friday ever came.",
+          "at": 1781033297
+        },
+        {
+          "dir": 1,
+          "note": "Trusted the unexplained aversion to the sea — both rejected ships were lost; gave the Prior's moidores back to charity.",
+          "at": 1781033419
+        }
+      ],
+      "evidence": [
+        "ep-1",
+        "ep-2"
+      ],
+      "created_at": 1781032205,
+      "updated_at": 1781033419
+    },
+    "pottery-made": {
+      "id": "pottery-made",
+      "species": "state",
+      "text": "Makes his own fired earthenware now: pipkins, pots (one glazed), broad baking pans; boiling and baking both solved.",
+      "parents": [
+        "life/island/stores"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032936
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-88",
+        "ep-89",
+        "ep-90",
+        "ep-91"
+      ],
+      "created_at": 1781032936,
+      "updated_at": 1781032936
+    },
+    "powder-parcels": {
+      "id": "powder-parcels",
+      "species": "state",
+      "text": "Powder is abating seriously (eleventh year); the looming question is how to kill goats when it is gone.",
+      "parents": [
+        "life/island/stores"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033041
+      },
+      "history": [
+        {
+          "value": "About 240 pounds of gunpowder, divided into roughly a hundred parcels hidden separately among the rocks against lightning.",
+          "superseded_at": 1781033041
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-41",
+        "ep-42",
+        "ep-43",
+        "ep-44",
+        "ep-101",
+        "ep-102",
+        "ep-103"
+      ],
+      "created_at": 1781032548,
+      "updated_at": 1781033041
+    },
+    "prudent-foresight": {
+      "id": "prudent-foresight",
+      "species": "disposition",
+      "text": "Plans against remote dangers with methodical care.",
+      "parents": [
+        "temperament"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 8,
+        "contradict": 0,
+        "last_event_at": 1781033345
+      },
+      "history": [],
+      "axis": 0.8998871,
+      "nudges": [
+        {
+          "dir": 1,
+          "note": "Sited the home for water, shade, defence and sea-view; parcelled the powder against one blast.",
+          "at": 1781032548
+        },
+        {
+          "dir": 1,
+          "note": "Already providing for life after the ammunition is spent and after health decays.",
+          "at": 1781032577
+        },
+        {
+          "dir": 1,
+          "note": "Saved every grain of the accidental barley to re-sow.",
+          "at": 1781032696
+        },
+        {
+          "dir": 1,
+          "note": "Held back a third of the seed against ignorance of the season — and it saved the crop line.",
+          "at": 1781032872
+        },
+        {
+          "dir": 1,
+          "note": "Anchored two days and surveyed the current from a hill before venturing the point.",
+          "at": 1781033014
+        },
+        {
+          "dir": 1,
+          "note": "The multi-year corn reserve policy.",
+          "at": 1781033109
+        },
+        {
+          "dir": 1,
+          "note": "Defence in depth and a backup herd, all from one footprint.",
+          "at": 1781033126
+        },
+        {
+          "dir": 1,
+          "note": "Sworn contracts, signals, and Inquisition-proofing before any rescue was attempted.",
+          "at": 1781033345
+        }
+      ],
+      "evidence": [
+        "ep-41",
+        "ep-42",
+        "ep-43",
+        "ep-44"
+      ],
+      "created_at": 1781032548,
+      "updated_at": 1781033345
+    },
+    "religion-scruple": {
+      "id": "religion-scruple",
+      "species": "state",
+      "text": "A scruple stands against settling in Brazil: he professed Papist there and 'thought it might not be the best religion to die with'.",
+      "parents": [
+        "life"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033419
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-164",
+        "ep-165",
+        "ep-166",
+        "ep-167",
+        "ep-168"
+      ],
+      "created_at": 1781033419,
+      "updated_at": 1781033419
+    },
+    "relocation-plan": {
+      "id": "relocation-plan",
+      "species": "state",
+      "text": "After the earthquake he resolved to move house off the hanging precipice — but only once a new walled camp is ready; meanwhile he ventures staying put.",
+      "parents": [
+        "life/island/dwelling"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032724
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-58",
+        "ep-59",
+        "ep-60"
+      ],
+      "created_at": 1781032724,
+      "updated_at": 1781032724
+    },
+    "rescue-pact": {
+      "id": "rescue-pact",
+      "species": "state",
+      "text": "A rescue compact is running: the Spaniard and Friday's father are away to the main to fetch the sixteen castaways under sworn terms (his absolute command, no New Spain), with a return signal agreed.",
+      "parents": [
+        "life/island",
+        "people"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033345
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-151",
+        "ep-152",
+        "ep-153",
+        "ep-154",
+        "ep-155"
+      ],
+      "created_at": 1781033345,
+      "updated_at": 1781033345
+    },
+    "ruthless-resolve": {
+      "id": "ruthless-resolve",
+      "species": "disposition",
+      "text": "Capable of cold ruthlessness when liberty or survival is at stake.",
+      "parents": [
+        "temperament"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 5,
+        "contradict": 0,
+        "last_event_at": 1781033321
+      },
+      "history": [],
+      "axis": 0.4814453,
+      "nudges": [
+        {
+          "dir": 1,
+          "note": "Threatened to shoot the swimming Moor; weighed drowning the boy before trusting him.",
+          "at": 1781032346
+        },
+        {
+          "dir": 1,
+          "note": "Plotting to destroy the feasters and rescue their victim.",
+          "at": 1781033144
+        },
+        {
+          "dir": -1,
+          "note": "Talked himself down from the ambush massacre on both moral and prudential grounds.",
+          "at": 1781033160
+        },
+        {
+          "dir": 1,
+          "note": "Clubbed one pursuer and shot the other dead without hesitation when the moment came.",
+          "at": 1781033250
+        },
+        {
+          "dir": 1,
+          "note": "Led the slaughter of seventeen-plus once a Christian victim was at stake.",
+          "at": 1781033321
+        }
+      ],
+      "evidence": [
+        "ep-14",
+        "ep-15",
+        "ep-16"
+      ],
+      "created_at": 1781032346,
+      "updated_at": 1781033321
+    },
+    "salvaged-stores": {
+      "id": "salvaged-stores",
+      "species": "state",
+      "text": "The magazine ashore ('the biggest ever laid up for one man'): carpenter's tools, grindstone, screw-jack, nails, hatchets, iron crows, seven muskets, three fowling-pieces, two pistols, three powder barrels (one wet), bullets and shot, all the ship's sails as canvas, cables, hammock, bedding, clothes, razors, knives and forks; bread, rice, cheeses, rum, sugar, flour.",
+      "parents": [
+        "life/island/stores"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032530
+      },
+      "history": [
+        {
+          "value": "Salvaged so far: carpenter's chest of tools ('more valuable than a shipload of gold'), two fowling-pieces, two pistols, two dry powder barrels, swords, saws, axe, hammer; bread, rice, three Dutch cheeses, dried goat's flesh, rum and cordials.",
+          "superseded_at": 1781032530
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-35",
+        "ep-36",
+        "ep-37",
+        "ep-38",
+        "ep-39",
+        "ep-40"
+      ],
+      "created_at": 1781032497,
+      "updated_at": 1781032530
+    },
+    "seafaring-resolve": {
+      "id": "seafaring-resolve",
+      "species": "state",
+      "text": "Resolved at eighteen to go to sea against father's command and mother's entreaties, considering himself too old to apprentice to a trade.",
+      "parents": [
+        "life/voyages"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 2,
+        "contradict": 0,
+        "last_event_at": 1781032238
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-1",
+        "ep-2",
+        "ep-3",
+        "ep-4",
+        "ep-5",
+        "ep-6"
+      ],
+      "created_at": 1781032205,
+      "updated_at": 1781032238
+    },
+    "seasons-knowledge": {
+      "id": "seasons-knowledge",
+      "species": "state",
+      "text": "The year divides into two rainy seasons (half Feb–half Apr; half Aug–half Oct) and two dry; sow to meet the rains, stay indoors when wet.",
+      "parents": [
+        "life/island",
+        "life/island/crops"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032872
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-78",
+        "ep-79",
+        "ep-80",
+        "ep-81",
+        "ep-82"
+      ],
+      "created_at": 1781032872,
+      "updated_at": 1781032872
+    },
+    "second-canoe": {
+      "id": "second-canoe",
+      "species": "state",
+      "text": "The boat is hidden in a cove under high rocks at the east end, with mast, sail and grapnel carried away — no shadow of a boat left for savages to discover.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033183
+      },
+      "history": [
+        {
+          "value": "Keeps a small sailing canoe (mast, sail, lockers, gun-flap, umbrella-awning) in the creek — fit for coasting, far too small for the forty-mile run to the mainland.",
+          "superseded_at": 1781033041
+        },
+        {
+          "value": "The sailing canoe lies harboured in a cove on the far side of the island — the point currents make bringing her round too dangerous; he goes without a boat.",
+          "superseded_at": 1781033183
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-98",
+        "ep-99",
+        "ep-100",
+        "ep-101",
+        "ep-102",
+        "ep-103",
+        "ep-122",
+        "ep-123",
+        "ep-124",
+        "ep-125"
+      ],
+      "created_at": 1781033014,
+      "updated_at": 1781033183
+    },
+    "secret-cave": {
+      "id": "secret-cave",
+      "species": "state",
+      "text": "Keeps a secret natural cave (found via the dying he-goat) deep behind brushwood near the charcoal wood — the retreat of last resort, proof against any search.",
+      "parents": [
+        "life/island/dwelling"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033183
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-122",
+        "ep-123",
+        "ep-124",
+        "ep-125"
+      ],
+      "created_at": 1781033183,
+      "updated_at": 1781033183
+    },
+    "self-reliance": {
+      "id": "self-reliance",
+      "species": "disposition",
+      "text": "Resourceful contriver; engineers his own way out with tools, tricks and patience.",
+      "parents": [
+        "temperament"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 9,
+        "contradict": 0,
+        "last_event_at": 1781033364
+      },
+      "history": [],
+      "axis": 0.9249153,
+      "nudges": [
+        {
+          "dir": 1,
+          "note": "Provisioned and stole the longboat under the patron's nose after two years of watching.",
+          "at": 1781032346
+        },
+        {
+          "dir": 1,
+          "note": "Staked everything on reaching the Cape de Verde shipping lanes and managed the coast voyage to it.",
+          "at": 1781032376
+        },
+        {
+          "dir": 1,
+          "note": "'It was in vain to sit still and wish for what was not to be had; this extremity roused my application' — the raft.",
+          "at": 1781032497
+        },
+        {
+          "dir": 1,
+          "note": "'By stating and squaring everything by reason... every man may be in time master of every mechanic art.'",
+          "at": 1781032602
+        },
+        {
+          "dir": 1,
+          "note": "Labour and patience: the 42-day board, the hanged-crow scarecrows, the cutlass sickle.",
+          "at": 1781032916
+        },
+        {
+          "dir": 1,
+          "note": "Pottery, mortar, sieve and oven each conquered by experiment and infinite labour.",
+          "at": 1781032936
+        },
+        {
+          "dir": 1,
+          "note": "Goatskin tailoring, the umbrella, the two-year canoe with its half-mile canal.",
+          "at": 1781033014
+        },
+        {
+          "dir": 1,
+          "note": "Flock, dairy, butter, cheese and salt all raised from three trapped kids.",
+          "at": 1781033067
+        },
+        {
+          "dir": 1,
+          "note": "Won the island battle with theatre and patience rather than powder — the hallooing decoy, the staged 'governor'.",
+          "at": 1781033364
+        }
+      ],
+      "evidence": [
+        "ep-14",
+        "ep-15",
+        "ep-16"
+      ],
+      "created_at": 1781032346,
+      "updated_at": 1781033364
+    },
+    "shame-over-repentance": {
+      "id": "shame-over-repentance",
+      "species": "disposition",
+      "text": "Lets shame of being laughed at outweigh repentance and return.",
+      "parents": [
+        "temperament"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032317
+      },
+      "history": [],
+      "axis": 0.25,
+      "nudges": [
+        {
+          "dir": 1,
+          "note": "Ashamed to go home after the wreck though reason urged it.",
+          "at": 1781032317
+        }
+      ],
+      "evidence": [
+        "ep-10",
+        "ep-11",
+        "ep-12",
+        "ep-13"
+      ],
+      "created_at": 1781032317,
+      "updated_at": 1781032317
+    },
+    "shipwreck-yarmouth": {
+      "id": "shipwreck-yarmouth",
+      "species": "state",
+      "text": "First ship was lost: foundered in Yarmouth Roads during a great storm; all hands rescued ashore near Winterton.",
+      "parents": [
+        "life/voyages"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032286
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-7",
+        "ep-8",
+        "ep-9"
+      ],
+      "created_at": 1781032286,
+      "updated_at": 1781032286
+    },
+    "shipwrecked-1659": {
+      "id": "shipwrecked-1659",
+      "species": "state",
+      "text": "Shipwrecked 1 September 1659 — eight years to the day after leaving Hull — on a sand bar off an unknown shore near the Orinoco; the ship stuck fast offshore.",
+      "parents": [
+        "life/island",
+        "life/voyages"
+      ],
+      "salience": {
+        "importance": 0.9,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032462
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-29",
+        "ep-30",
+        "ep-31"
+      ],
+      "created_at": 1781032462,
+      "updated_at": 1781032462
+    },
+    "sole-survivor": {
+      "id": "sole-survivor",
+      "species": "state",
+      "text": "The island is left behind: departed 19 December 1686 on the recovered English ship after twenty-eight years, two months and nineteen days; five mutineers stayed as its new inhabitants (with the Spaniards yet to return).",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.9,
+        "retrieval_count": 2,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033396
+      },
+      "history": [
+        {
+          "value": "Sole survivor of the wreck of eleven men; entirely alone on the island.",
+          "superseded_at": 1781033396
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-32",
+        "ep-33",
+        "ep-34",
+        "ep-160",
+        "ep-161",
+        "ep-162",
+        "ep-163"
+      ],
+      "created_at": 1781032475,
+      "updated_at": 1781033396
+    },
+    "spaniard-guest": {
+      "id": "spaniard-guest",
+      "species": "state",
+      "text": "A Spaniard — one of the seventeen from the mainland — rescued from the cannibals, recovering with them; brave to a fault, deeply grateful.",
+      "parents": [
+        "people"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033321
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-147",
+        "ep-148",
+        "ep-149",
+        "ep-150"
+      ],
+      "created_at": 1781033321,
+      "updated_at": 1781033321
+    },
+    "spanish-wreck": {
+      "id": "spanish-wreck",
+      "species": "state",
+      "text": "The Spanish wreck has been boarded and stripped of what one canoe could carry; no soul alive aboard but the dog he rescued; the rest of her money lies jammed in the rocks.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033226
+      },
+      "history": [
+        {
+          "value": "A European ship lies wrecked on the offshore rocks (May, year twenty-four); no survivor found ashore but a drowned boy; he is provisioning his canoe to board her, trusting a providential impression.",
+          "superseded_at": 1781033226
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-126",
+        "ep-127",
+        "ep-128",
+        "ep-129",
+        "ep-130",
+        "ep-131",
+        "ep-132"
+      ],
+      "created_at": 1781033206,
+      "updated_at": 1781033226
+    },
+    "tame-kid": {
+      "id": "tame-kid",
+      "species": "state",
+      "text": "The first tame goat died of mere age — he could never bring himself to kill her; no he-goat was ever brought to the tame line.",
+      "parents": [
+        "life/island/animals"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033041
+      },
+      "history": [
+        {
+          "value": "Keeps a tame kid (its broken leg splinted and healed) grazing at the door; plan is a bred flock for when ammunition fails.",
+          "superseded_at": 1781032916
+        },
+        {
+          "value": "Two tame goats are domestics now — the nursed broken-leg kid and the dog-caught kid that follows like a dog — beside Poll the parrot, the dog, and too many cats.",
+          "superseded_at": 1781033041
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-54",
+        "ep-55",
+        "ep-56",
+        "ep-57",
+        "ep-83",
+        "ep-84",
+        "ep-85",
+        "ep-86",
+        "ep-87",
+        "ep-101",
+        "ep-102",
+        "ep-103"
+      ],
+      "created_at": 1781032696,
+      "updated_at": 1781033041
+    },
+    "tool-wants": {
+      "id": "tool-wants",
+      "species": "state",
+      "text": "Made his own spade (iron-tree wood) and hod; a wheelbarrow proved impossible (no wheel, no gudgeons); still wants needles, pins, thread and ink that will not run out.",
+      "parents": [
+        "life/island/stores"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032653
+      },
+      "history": [
+        {
+          "value": "Standing wants: ink, a spade, pickaxe and shovel, needles, pins and thread; lack of tools makes every work heavy — the pale alone took near a year.",
+          "superseded_at": 1781032653
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-45",
+        "ep-46",
+        "ep-47",
+        "ep-51",
+        "ep-52",
+        "ep-53"
+      ],
+      "created_at": 1781032577,
+      "updated_at": 1781032653
+    },
+    "turtle-shore": {
+      "id": "turtle-shore",
+      "species": "state",
+      "text": "The far shore teems with turtles and strange fowl including penguins — far richer than his own side, but he will not move.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032916
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-83",
+        "ep-84",
+        "ep-85",
+        "ep-86",
+        "ep-87"
+      ],
+      "created_at": 1781032916,
+      "updated_at": 1781032916
+    },
+    "two-plantations": {
+      "id": "two-plantations",
+      "species": "state",
+      "text": "Two seats in working order: the castle (multi-chambered caves, corn stores in pots and bushel baskets, the living wall fully concealing it) and the country bower with the goat enclosures, half-way to the boat.",
+      "parents": [
+        "life/island/dwelling"
+      ],
+      "salience": {
+        "importance": 0.6,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781033092
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-110",
+        "ep-111"
+      ],
+      "created_at": 1781033092,
+      "updated_at": 1781033092
+    },
+    "values-coin": {
+      "id": "values-coin",
+      "species": "disposition",
+      "text": "Sets store by money for its own sake.",
+      "parents": [
+        "money-style"
+      ],
+      "salience": {
+        "importance": 0.5,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 5,
+        "contradict": 0,
+        "last_event_at": 1781033419
+      },
+      "history": [],
+      "axis": -0.17675781,
+      "nudges": [
+        {
+          "dir": -1,
+          "note": "The 'O drug!' speech over the ship's coin.",
+          "at": 1781032530
+        },
+        {
+          "dir": 1,
+          "note": "'Upon second thoughts I took it away' — kept the useless coin anyway.",
+          "at": 1781032548
+        },
+        {
+          "dir": -1,
+          "note": "Coin equated with mouldy uselessness; diamonds would be the same.",
+          "at": 1781032977
+        },
+        {
+          "dir": 1,
+          "note": "Still lugged every coin home and planned to fetch the rest 'if I ever escape to England'.",
+          "at": 1781033226
+        },
+        {
+          "dir": -1,
+          "note": "Returned the old captain's offered moidores and endowed the monastery and poor unprompted.",
+          "at": 1781033419
+        }
+      ],
+      "evidence": [
+        "ep-37",
+        "ep-38",
+        "ep-39",
+        "ep-40"
+      ],
+      "created_at": 1781032530,
+      "updated_at": 1781033419
+    },
+    "wanderlust": {
+      "id": "wanderlust",
+      "species": "disposition",
+      "text": "Driven by rambling, wandering ambition; restless against settled life.",
+      "parents": [
+        "temperament"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 10,
+        "contradict": 0,
+        "last_event_at": 1781033444
+      },
+      "history": [],
+      "axis": 0.6437597,
+      "nudges": [
+        {
+          "dir": 1,
+          "note": "Filled with rambling thoughts from youth; nothing but the sea would satisfy.",
+          "at": 1781032205
+        },
+        {
+          "dir": 1,
+          "note": "Boarded the ship on impulse at Hull without consulting anyone.",
+          "at": 1781032238
+        },
+        {
+          "dir": 1,
+          "note": "Aspiring thoughts from the 300-pound windfall 'completed my ruin'; went straight back to sea.",
+          "at": 1781032317
+        },
+        {
+          "dir": -1,
+          "note": "Settled for years as a planter, the very middle station he fled.",
+          "at": 1781032410
+        },
+        {
+          "dir": 1,
+          "note": "'Born to be my own destroyer': abandoned a thriving plantation for the Guinea voyage.",
+          "at": 1781032437
+        },
+        {
+          "dir": 1,
+          "note": "The sight of the mainland bred the boat obsession — 'the eagerness of my fancy prevailed'.",
+          "at": 1781032960
+        },
+        {
+          "dir": -1,
+          "note": "'Had enough of rambling to sea for some time'; a year of sedate, retired life.",
+          "at": 1781033041
+        },
+        {
+          "dir": 1,
+          "note": "'My unlucky head... filled with projects and designs how to get away' — even to the cannibal mainland.",
+          "at": 1781033226
+        },
+        {
+          "dir": 1,
+          "note": "Seventeen bearded men on the main re-lit the escape fire; the new periagua begun at once.",
+          "at": 1781033297
+        },
+        {
+          "dir": 1,
+          "note": "At over sixty, widowed, off to the East Indies with the nephew — the original sin uncured to the last.",
+          "at": 1781033444
+        }
+      ],
+      "evidence": [
+        "ep-1",
+        "ep-2"
+      ],
+      "created_at": 1781032205,
+      "updated_at": 1781033444
+    },
+    "will-and-covenants": {
+      "id": "will-and-covenants",
+      "species": "state",
+      "text": "A formal will names the Portuguese captain universal heir (half produce his, half to England); neighbours hold covenants to run the plantation in his absence.",
+      "parents": [
+        "work/plantation",
+        "people/portuguese-captain"
+      ],
+      "salience": {
+        "importance": 0.8,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033487
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032437
+      },
+      "history": [],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-27",
+        "ep-28"
+      ],
+      "created_at": 1781032437,
+      "updated_at": 1781032437
+    },
+    "wreck-accessible": {
+      "id": "wreck-accessible",
+      "species": "state",
+      "text": "The earthquake heaved the broken wreck clear of sand — walkable at low tide and stripped daily through mid-June; enough timber, plank and ironwork landed 'to have built a good boat, if I had known how'.",
+      "parents": [
+        "life/island"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 0,
+        "last_retrieved_at": null
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032753
+      },
+      "history": [
+        {
+          "value": "The wreck lies on a sand bank about a mile offshore, stern lifted dry, reachable by swimming at low tide; provisions found dry.",
+          "superseded_at": 1781032548
+        },
+        {
+          "value": "The wreck is gone — broken up and vanished after a storm thirteen days in; only drift pieces come ashore now.",
+          "superseded_at": 1781032753
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-32",
+        "ep-33",
+        "ep-34",
+        "ep-41",
+        "ep-42",
+        "ep-43",
+        "ep-44",
+        "ep-61",
+        "ep-62",
+        "ep-63"
+      ],
+      "created_at": 1781032475,
+      "updated_at": 1781032753
+    },
+    "xury-companion": {
+      "id": "xury-companion",
+      "species": "state",
+      "text": "Xury went to the Portuguese captain's service at Brazil, with freedom promised in ten years if he turns Christian; parting with him is a standing regret.",
+      "parents": [
+        "people/xury"
+      ],
+      "salience": {
+        "importance": 0.7,
+        "retrieval_count": 1,
+        "last_retrieved_at": 1781033473
+      },
+      "belief": {
+        "support": 1,
+        "contradict": 0,
+        "last_event_at": 1781032410
+      },
+      "history": [
+        {
+          "value": "Xury, his patron's slave boy, is his sworn companion since the escape — 'faithful to me, and go all over the world with me'.",
+          "superseded_at": 1781032410
+        }
+      ],
+      "axis": 0.0,
+      "nudges": [],
+      "evidence": [
+        "ep-14",
+        "ep-15",
+        "ep-16",
+        "ep-17",
+        "ep-18",
+        "ep-19",
+        "ep-23",
+        "ep-24",
+        "ep-25",
+        "ep-26"
+      ],
+      "created_at": 1781032346,
+      "updated_at": 1781032410
+    }
+  },
+  "distillants": {
+    "communication": {
+      "id": "communication",
+      "tree": "profile",
+      "label": "Communication style",
+      "routing": [],
+      "parents": [],
+      "misc_count": 0,
+      "line": "How they like to be spoken to."
+    },
+    "life": {
+      "id": "life",
+      "tree": "registry",
+      "label": "Life",
+      "routing": [
+        "home",
+        "health",
+        "gym",
+        "trip",
+        "travel",
+        "hobby",
+        "weekend",
+        "prayer",
+        "bible",
+        "scripture",
+        "faith",
+        "religion",
+        "god",
+        "england",
+        "return"
+      ],
+      "parents": [],
+      "misc_count": 3,
+      "line": "Health, home, habits, interests."
+    },
+    "life/island": {
+      "id": "life/island",
+      "tree": "registry",
+      "label": "The island",
+      "routing": [
+        "island",
+        "shore",
+        "castaway",
+        "cast away",
+        "wreck",
+        "1659",
+        "orinoco",
+        "shipwreck",
+        "alone",
+        "survivor",
+        "hill",
+        "goats",
+        "september",
+        "calendar",
+        "latitude",
+        "dog",
+        "cats",
+        "pets",
+        "island of despair",
+        "routine",
+        "ague",
+        "sick",
+        "fever",
+        "ill",
+        "vale",
+        "grapes",
+        "limes",
+        "valley",
+        "brook",
+        "seasons",
+        "rainy",
+        "mainland",
+        "savages",
+        "cannibals",
+        "turtles",
+        "penguins",
+        "canoe",
+        "periagua",
+        "boat",
+        "sail",
+        "footprint",
+        "foot",
+        "bones",
+        "feast",
+        "spanish ship",
+        "trinidad",
+        "spaniards",
+        "mutineers",
+        "english ship",
+        "left the island",
+        "departure",
+        "colony"
+      ],
+      "parents": [
+        "life"
+      ],
+      "misc_count": 0,
+      "line": "The island years, 1659–1686: twenty-eight years of captivity and remaking, now left behind."
+    },
+    "life/island/animals": {
+      "id": "life/island/animals",
+      "tree": "registry",
+      "label": "Animals",
+      "routing": [
+        "goat",
+        "goats",
+        "kid",
+        "flock",
+        "tame",
+        "milk",
+        "pigeons",
+        "parrot",
+        "poll",
+        "dairy",
+        "cheese",
+        "butter"
+      ],
+      "parents": [
+        "life/island"
+      ],
+      "misc_count": 0,
+      "line": "A tame flock of dozens with a working dairy; Poll speaks, the dog is old, cats run half wild."
+    },
+    "life/island/crops": {
+      "id": "life/island/crops",
+      "tree": "registry",
+      "label": "Crops & harvest",
+      "routing": [
+        "barley",
+        "rice",
+        "corn",
+        "harvest",
+        "sow",
+        "sowing",
+        "seed",
+        "crop",
+        "grain",
+        "bread"
+      ],
+      "parents": [
+        "life/island"
+      ],
+      "misc_count": 0,
+      "line": "The accidental barley and rice, husbanded toward bread."
+    },
+    "life/island/dwelling": {
+      "id": "life/island/dwelling",
+      "tree": "registry",
+      "label": "Dwelling",
+      "routing": [
+        "tent",
+        "cave",
+        "home",
+        "castle",
+        "habitation",
+        "fence",
+        "bower",
+        "lodging",
+        "fortress",
+        "ladder",
+        "earthquake",
+        "country house",
+        "grotto",
+        "retreat"
+      ],
+      "parents": [
+        "life/island"
+      ],
+      "misc_count": 0,
+      "line": "Where and how he lives on the island; first a tent by the landing cove."
+    },
+    "life/island/stores": {
+      "id": "life/island/stores",
+      "tree": "registry",
+      "label": "Stores & possessions",
+      "routing": [
+        "tools",
+        "gun",
+        "guns",
+        "powder",
+        "salvage",
+        "raft",
+        "provisions",
+        "stores",
+        "carpenter",
+        "grindstone",
+        "muskets",
+        "canvas",
+        "coin",
+        "money",
+        "bible",
+        "bibles",
+        "ink",
+        "journal",
+        "spade",
+        "biscuit",
+        "pots",
+        "pottery",
+        "earthenware",
+        "oven",
+        "clothes",
+        "shirts",
+        "hat",
+        "goatskin",
+        "umbrella",
+        "doubloons",
+        "treasure"
+      ],
+      "parents": [
+        "life/island"
+      ],
+      "misc_count": 0,
+      "line": "Everything salvaged from the wreck and made since — tools, arms, provisions."
+    },
+    "life/origins": {
+      "id": "life/origins",
+      "tree": "registry",
+      "label": "Origins",
+      "routing": [
+        "born",
+        "york",
+        "crusoe",
+        "kreutznaer",
+        "family name",
+        "brothers"
+      ],
+      "parents": [
+        "life"
+      ],
+      "misc_count": 0,
+      "line": "Born 1632 in York; Kreutznaer corrupted to Crusoe; third son, bred to no trade."
+    },
+    "life/slavery-sallee": {
+      "id": "life/slavery-sallee",
+      "tree": "registry",
+      "label": "Slavery at Sallee",
+      "routing": [
+        "sallee",
+        "moors",
+        "slave",
+        "slavery",
+        "pirate",
+        "rover",
+        "patron",
+        "escape",
+        "longboat"
+      ],
+      "parents": [
+        "life",
+        "life/voyages"
+      ],
+      "misc_count": 0,
+      "line": "Two years a slave of a Moorish rover captain at Sallee, plotting escape."
+    },
+    "life/voyages": {
+      "id": "life/voyages",
+      "tree": "registry",
+      "label": "Voyages & the sea",
+      "routing": [
+        "sea",
+        "voyage",
+        "sail",
+        "sailing",
+        "ship",
+        "abroad",
+        "go to sea",
+        "1651",
+        "first voyage",
+        "hull",
+        "yarmouth",
+        "winterton",
+        "foundered",
+        "supercargo"
+      ],
+      "parents": [
+        "life"
+      ],
+      "misc_count": 0,
+      "line": "Every voyage of his life miscarried into wonder: Yarmouth wreck, Sallee slavery, the island, and home at last overland through wolves."
+    },
+    "money": {
+      "id": "money",
+      "tree": "registry",
+      "label": "Money",
+      "routing": [
+        "money",
+        "pay",
+        "paid",
+        "payment",
+        "rent",
+        "bill",
+        "bills",
+        "budget",
+        "salary",
+        "price",
+        "cost",
+        "owe",
+        "bought",
+        "buy"
+      ],
+      "parents": [],
+      "misc_count": 1,
+      "line": "From runaway's pocket money through slavery and a wrecked fortune to a restored Brazil estate and island proprietorship — rich, and indifferent to coin itself."
+    },
+    "money-style": {
+      "id": "money-style",
+      "tree": "profile",
+      "label": "Money style",
+      "routing": [],
+      "parents": [],
+      "misc_count": 0,
+      "line": "How they handle money: discipline, risk, planning."
+    },
+    "money/trade": {
+      "id": "money/trade",
+      "tree": "registry",
+      "label": "Trade & fortune",
+      "routing": [
+        "guinea",
+        "trade",
+        "merchant",
+        "gold",
+        "pounds",
+        "fortune",
+        "cargo",
+        "widow",
+        "pieces of eight"
+      ],
+      "parents": [
+        "money"
+      ],
+      "misc_count": 0,
+      "line": "Fortune built and lost through sea ventures; the Guinea trade was the one success."
+    },
+    "people": {
+      "id": "people",
+      "tree": "registry",
+      "label": "People",
+      "routing": [
+        "friend",
+        "family",
+        "sister",
+        "brother",
+        "mom",
+        "dad",
+        "partner",
+        "wife",
+        "husband",
+        "boss",
+        "landlord",
+        "spaniard"
+      ],
+      "parents": [],
+      "misc_count": 4,
+      "line": "Family, friends, contacts, counterparties."
+    },
+    "people/english-captain": {
+      "id": "people/english-captain",
+      "tree": "registry",
+      "label": "The English captain",
+      "routing": [
+        "captain",
+        "mate",
+        "mutiny",
+        "jamaica"
+      ],
+      "parents": [
+        "people"
+      ],
+      "misc_count": 0,
+      "line": "Master of the mutinied English ship; rescued under the tree with his mate and a passenger; ally in retaking her."
+    },
+    "people/friday": {
+      "id": "people/friday",
+      "tree": "registry",
+      "label": "Friday",
+      "routing": [
+        "friday",
+        "my man",
+        "my servant",
+        "savage servant",
+        "father"
+      ],
+      "parents": [
+        "people"
+      ],
+      "misc_count": 0,
+      "line": "The savage rescued from the cannibals' slaughter, named for the day of his deliverance; sworn to serve for life."
+    },
+    "people/parents": {
+      "id": "people/parents",
+      "tree": "registry",
+      "label": "Parents",
+      "routing": [
+        "father",
+        "mother",
+        "parents",
+        "middle station",
+        "my father"
+      ],
+      "parents": [
+        "people"
+      ],
+      "misc_count": 0,
+      "line": "Father: Bremen-born merchant, middle-station philosophy, opposed the sea. Mother: of the Robinson family, sided with him."
+    },
+    "people/portuguese-captain": {
+      "id": "people/portuguese-captain",
+      "tree": "registry",
+      "label": "The Portuguese captain",
+      "routing": [
+        "portuguese captain",
+        "captain",
+        "seignior inglese",
+        "lisbon"
+      ],
+      "parents": [
+        "people"
+      ],
+      "misc_count": 0,
+      "line": "Rescuer at sea off Africa; scrupulously honest benefactor and standing friend."
+    },
+    "people/xury": {
+      "id": "people/xury",
+      "tree": "registry",
+      "label": "Xury",
+      "routing": [
+        "xury",
+        "the boy"
+      ],
+      "parents": [
+        "people"
+      ],
+      "misc_count": 0,
+      "line": "The Moorish boy who escaped Sallee with him; swore faithfulness, proves loyal."
+    },
+    "temperament": {
+      "id": "temperament",
+      "tree": "profile",
+      "label": "Temperament",
+      "routing": [],
+      "parents": [],
+      "misc_count": 0,
+      "line": "An impulsive runaway hardened into a patient, methodical, providence-minded survivor."
+    },
+    "work": {
+      "id": "work",
+      "tree": "registry",
+      "label": "Work",
+      "routing": [
+        "work",
+        "job",
+        "project",
+        "meeting",
+        "deadline",
+        "office",
+        "client",
+        "navigation"
+      ],
+      "parents": [],
+      "misc_count": 1,
+      "line": "Job, projects, professional life."
+    },
+    "work/plantation": {
+      "id": "work/plantation",
+      "tree": "registry",
+      "label": "Brazil plantation",
+      "routing": [
+        "plantation",
+        "brazil",
+        "brazils",
+        "sugar",
+        "tobacco",
+        "planter",
+        "ingenio",
+        "wells",
+        "will"
+      ],
+      "parents": [
+        "work",
+        "money"
+      ],
+      "misc_count": 0,
+      "line": "Plantation in the Brazils near All Saints' Bay, grown from food crops toward tobacco and sugar."
+    }
+  }
+}
