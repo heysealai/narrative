@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 
 use crate::belief;
 use crate::llm::{ChatRequest, Llm};
-use crate::model::{Graph, Leaf, Distillant, Species, Tree};
+use crate::model::{Graph, Leaf, Distillant, Species, Tree, PROFILE_APEX};
 use crate::projection;
 use crate::routing;
 
@@ -453,7 +453,7 @@ Rules:
 5. Cross-match against the comparanda you are given. Classify each state: novel (nothing like it exists), duplicate (already stored, restated), supports (new evidence for an existing leaf — set target), contradicts (casts doubt, no clear replacement — set target), supersedes (clear new value replacing an old one — set target). Never store the same knowledge twice as novel. When the turn merely adds evidence for an existing leaf and there is nothing to restate, emit a reinforces entry instead of a supports state.
 6. You classify; the runtime does the arithmetic. Never hedge text with probabilities.
 7. importance: 0.9+ money rules, safety-critical facts, explicit "remember this"; ~0.5 ordinary facts; ~0.2 minor color. High-importance exceptions ("got scammed by X once") deserve their own leaf — never average them away.
-8. Dispositions: the leaf text states the +1 pole of the axis. dir=+1 pushes toward the statement, dir=-1 against it. The whole profile is shown to you every time (pinned): an observation about a tendency already tracked is a nudge on that existing id — a new leaf only for a genuinely new axis. Keep profile axes few and broad.
+8. Dispositions: the leaf text states the +1 pole of the axis. dir=+1 pushes toward the statement, dir=-1 against it. The whole profile is shown to you every time (pinned): an observation about a tendency already tracked is a nudge on that existing id — a new leaf only for a genuinely new axis. Keep profile axes few and broad. The profile's root, `character`, is the whole-person estimate consolidation distills from the axes: never hang a leaf there — a disposition always belongs to an axis under it.
 9. Episodes: log events worth remembering as events (payments, decisions, incidents, plans made). Tag with involved distillant ids. The leaf ops you emit alongside will be wired to them as evidence automatically.
 10. Use distill to refresh a distillant's one-line summary when what you learned makes the old line stale.
 11. Time: everything is stamped with write time automatically. When the turn says WHEN something actually happened or changed ("last month", "back in 2019", dated backlog text), set occurred_at to unix seconds; otherwise null. Recall renders ages from it — "changed 2mo ago" should mean two months of the user's life, not two months since you wrote it.
@@ -627,29 +627,16 @@ fn ensure_distillant(graph: &mut Graph, id: &str, tree: Tree, traces: &mut Vec<S
         return;
     }
     let label = id.rsplit('/').next().unwrap_or(id).replace('-', " ");
-    let parents = match id.rsplit_once('/') {
+    let named_parent = match id.rsplit_once('/') {
         Some((prefix, _)) if graph.distillants.contains_key(prefix) => vec![prefix.to_string()],
         _ => Vec::new(),
     };
+    let parents = graph.home_parents(id, tree, named_parent);
     // A bare stub has no line: nothing distilled it. Leaving the line empty
     // is what makes it visibly bare — every render says "(no line yet)" and
     // consolidation treats it as due (`consolidate::pressure`), where the
     // pass writes its first line or merges it into a same-named distillant.
-    graph.distillants.insert(
-        id.to_string(),
-        Distillant {
-            id: id.to_string(),
-            tree,
-            label,
-            line: String::new(),
-            routing: Vec::new(),
-            parents,
-            misc_count: 0,
-            consolidated_at: 0,
-            line_changed_at: 0,
-            forgotten_at: 0,
-        },
-    );
+    graph.distillants.insert(id.to_string(), Distillant::bare(id, tree, &label, parents, Vec::new()));
     traces.push(format!("⚠ auto-created bare distillant {id} (harvester skipped the distillant op)"));
 }
 
@@ -736,18 +723,24 @@ pub(crate) fn sync_facet_routing(graph: &mut Graph, distillant_id: &str, traces:
 pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
     let mut traces = Vec::new();
 
-    // Every apply starts on the parent-set invariant, so a graph written
-    // before it held is repaired the first time it is touched.
-    let repaired = graph.normalize_parents();
-    if !repaired.is_empty() {
-        traces.push(format!("⇢ parent sets antichained: {}", repaired.join(", ")));
+    // Every apply starts on the structural invariants, so a graph written
+    // before they held is repaired the first time it is touched.
+    let repaired = graph.normalize();
+    if repaired.apex_created {
+        traces.push(format!("⇢ profile apex {} created", PROFILE_APEX));
+    }
+    if !repaired.homed_under_apex.is_empty() {
+        traces.push(format!("⇢ axes homed under the apex: {}", repaired.homed_under_apex.join(", ")));
+    }
+    if !repaired.antichained.is_empty() {
+        traces.push(format!("⇢ parent sets antichained: {}", repaired.antichained.join(", ")));
     }
 
     // Distillants first so leaves have somewhere to hang.
     for op in &ops {
         if let Op::Distillant { id, tree, label, line, routing, parents } = op {
             let existed = graph.distillants.contains_key(id);
-            let parents = graph.antichain(parents.clone());
+            let parents = graph.home_parents(id, *tree, parents.clone());
             let entry = graph.distillants.entry(id.clone()).or_insert(Distillant {
                 id: id.clone(),
                 tree: *tree,
@@ -1001,7 +994,7 @@ fn apply_reparent(graph: &mut Graph, distillant_id: String, parents: Vec<String>
             kept.push(p);
         }
     }
-    let kept = graph.antichain(kept);
+    let kept = graph.home_parents(&distillant_id, tree, kept);
     let m = graph.distillants.get_mut(&distillant_id).expect("checked above");
     m.parents = kept;
     let dest = if m.parents.is_empty() { "(crown root)".to_string() } else { m.parents.join("+") };
@@ -1294,6 +1287,23 @@ mod tests {
 
         apply_ops(&mut g, vec![Op::Reparent { distillant: "work/video/prompt-hack".into(), parents: vec!["work".into(), "work/video".into()] }], 1_200);
         assert_eq!(g.distillants["work/video/prompt-hack"].parents, vec!["work/video"]);
+    }
+
+    #[test]
+    fn a_pre_apex_graph_is_homed_under_the_apex_on_its_first_apply() {
+        let mut g = Graph::seed();
+        g.distillants.remove(PROFILE_APEX);
+        for axis in ["communication", "money-style", "temperament"] {
+            g.distillants.get_mut(axis).unwrap().parents.clear();
+        }
+        let traces = apply_ops(&mut g, vec![], 1_000);
+        assert!(traces.iter().any(|t| t == "⇢ profile apex character created"), "{traces:?}");
+        assert!(traces.iter().any(|t| t == "⇢ axes homed under the apex: communication, money-style, temperament"), "{traces:?}");
+        assert_eq!(g.roots(Tree::Profile).len(), 1);
+        // A harvester-declared axis with no parent is an axis of the apex too.
+        apply_ops(&mut g, vec![Op::Distillant { id: "risk-appetite".into(), tree: Tree::Profile, label: "Risk appetite".into(), line: "Takes small bets.".into(), routing: vec![], parents: vec![] }], 2_000);
+        assert_eq!(g.distillants["risk-appetite"].parents, vec![PROFILE_APEX]);
+        assert!(apply_ops(&mut g, vec![], 3_000).is_empty(), "nothing left to repair");
     }
 
     #[test]

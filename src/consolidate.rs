@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use crate::harvest::{self, Op};
 use crate::llm::{ChatRequest, Llm};
 use crate::model::{
-    age_str, Graph, Id, Tree, COMPRESS_BATCH, DIGEST_MIN_CUT, DIGEST_WINDOW, MECH_DIGEST_PREFIX,
+    age_str, Graph, Id, Tree, COMPRESS_BATCH, DIGEST_MIN_CUT, DIGEST_WINDOW, MECH_DIGEST_PREFIX, PROFILE_APEX,
     STREAM_CAP,
 };
 
@@ -166,12 +166,22 @@ fn redistill_body(graph: &Graph, distillant_id: &str) -> Option<String> {
         m.line.clone()
     };
     let mut body = format!(
-        "Distillant: {} (label: {})\nCurrent line: {}\nCurrent routing: {}\n\nLeaves:\n",
+        "Distillant: {} (label: {})\nCurrent line: {}\nCurrent routing: {}\n",
         m.id,
         m.label,
         current_line,
         m.routing.join(", ")
     );
+    if m.id == PROFILE_APEX {
+        body.push_str(
+            "This is the profile apex: its line is the whole-person estimate — who this person is, \
+             drawn only from the axis lines below (how they tend, how they talk, how they handle money). \
+             One dense line of character, not a list of the axes. Where the axes pull against each \
+             other (tight with themselves, open-handed with others), the tension is the character: \
+             state it, never average it away.\n",
+        );
+    }
+    body.push_str("\nLeaves:\n");
     let leaves = graph.leaves_under(distillant_id);
     if leaves.is_empty() {
         body.push_str("(none)\n");
@@ -385,8 +395,16 @@ pub const BARE_PRESSURE: u32 = PRESSURE_TRIGGER;
 /// evidence, two such leaves alone reach the trigger.
 pub const DRIFT_AGAINST: u32 = 2;
 /// Drift weight of a child whose line text changed since the pass —
-/// the parent summarized a line that no longer exists.
+/// the parent summarized a line that no longer exists. One child among
+/// several leaves and children is a fraction of the evidence.
 pub const DRIFT_CHILD_LINE: u32 = 1;
+/// Drift weight of that same changed child line when the distillant holds
+/// no leaves of its own. Such a line summarizes its children and nothing
+/// else, so one child moving is not a fraction of the evidence — it is the
+/// evidence base moving, and that is a pass due on its own. The profile
+/// apex is the standing case: it never holds leaves (a disposition belongs
+/// to an axis), so its axis lines are all it has to be right about.
+pub const DRIFT_CHILD_LINE_SOLE_EVIDENCE: u32 = PRESSURE_TRIGGER;
 
 /// Semantic drift on one distillant: evidence that the cached line no
 /// longer follows from what hangs below it. Derived, never stored — the
@@ -395,22 +413,27 @@ pub const DRIFT_CHILD_LINE: u32 = 1;
 /// against their own text, a forget that removed something held here (the
 /// line summarized what no longer exists), and children whose lines
 /// materially changed; mere reinforcement and new leaves are not drift
-/// (new leaves are fat).
+/// (new leaves are fat). A changed child weighs by what else the
+/// distillant has: a fraction of the evidence beside its own leaves, the
+/// whole of it when there are none.
 pub fn drift(graph: &Graph, distillant_id: &str) -> u32 {
     let Some(m) = graph.distillants.get(distillant_id) else { return 0 };
     let t = m.consolidated_at;
-    let against = graph
-        .leaves_under(distillant_id)
-        .iter()
-        .filter(|l| l.belief.last_against_at > t)
-        .count() as u32;
+    let leaves = graph.leaves_under(distillant_id);
+    let against = leaves.iter().filter(|l| l.belief.last_against_at > t).count() as u32;
     let child_lines = graph
         .child_distillants(distillant_id)
         .iter()
         .filter(|c| c.line_changed_at > t)
         .count() as u32;
     let forgotten_under = u32::from(m.forgotten_at > t);
-    (against + forgotten_under) * DRIFT_AGAINST + child_lines * DRIFT_CHILD_LINE
+    let children_are_the_whole_evidence = leaves.is_empty();
+    let child_weight = if children_are_the_whole_evidence {
+        DRIFT_CHILD_LINE_SOLE_EVIDENCE
+    } else {
+        DRIFT_CHILD_LINE
+    };
+    (against + forgotten_under) * DRIFT_AGAINST + child_lines * child_weight
 }
 
 /// Consolidation pressure on one distillant: how far past fat it has grown,
@@ -899,7 +922,7 @@ mod tests {
 
     #[test]
     fn bare_stub_is_due_by_itself_and_the_body_says_so() {
-        let mut g = Graph::seed();
+        let mut g = written_seed();
         harvest::apply_ops(
             &mut g,
             vec![Op::State {
@@ -923,7 +946,9 @@ mod tests {
         let raw = r#"{"line": "Runs the X engagement report for friends.", "routing": ["x report"], "merge_into": ""}"#;
         apply_redistilled(&mut g, "work/x-engagement-report", raw, 2_000).unwrap();
         assert_eq!(pressure(&g, "work/x-engagement-report"), 0, "a written line ends bare pressure");
-        assert_eq!(due(&g), None);
+        // The stub is settled; its parent holds nothing but this child, so
+        // the line just written is the whole of what `work` summarizes.
+        assert_eq!(due(&g).as_deref(), Some("work"), "the freshly written child is drift on the parent above it");
     }
 
     #[test]
@@ -986,14 +1011,89 @@ mod tests {
         assert!(traces.iter().any(|t| t.contains("invalid")), "the merge names why: {traces:?}");
     }
 
+    /// A seed whose crowns already carry a judged line — the shape every
+    /// graph takes once its first passes have run. Pressure and drift are
+    /// measured on top of a written crown here; a fresh seed is bare, and
+    /// bare is its own pressure.
+    fn written_seed() -> Graph {
+        let mut g = Graph::seed();
+        for m in g.distillants.values_mut() {
+            m.line = format!("{} so far.", m.label);
+            m.line_changed_at = 1;
+            m.consolidated_at = 1;
+        }
+        g
+    }
+
+    fn bare_child(g: &mut Graph, id: &str, parent: &str) {
+        let label = id.rsplit('/').next().unwrap_or(id).replace('-', " ");
+        let m = crate::model::Distillant::bare(id, Tree::Registry, &label, vec![parent.to_string()], Vec::new());
+        g.distillants.insert(id.to_string(), m);
+    }
+
     fn leaf_under(g: &mut Graph, id: &str, parent: &str, at: u64) {
         let l = Leaf::new(id.into(), Species::State, format!("fact {id}"), vec![parent.into()], at);
         g.leaves.insert(l.id.clone(), l);
     }
 
     #[test]
-    fn pressure_counts_fat_and_residual() {
+    fn a_seeded_axis_comes_due_on_its_first_material() {
         let mut g = Graph::seed();
+        assert_eq!(due(&g), None, "a fresh seed has nothing to judge");
+        let l = Leaf::new("checks-balance".into(), Species::Disposition, "checks the balance before any spend".into(), vec!["money-style".into()], 1_000);
+        g.leaves.insert(l.id.clone(), l);
+        assert_eq!(pressure(&g, "money-style"), BARE_PRESSURE, "an unjudged axis is bare pressure");
+        assert_eq!(due(&g).as_deref(), Some("money-style"), "the axis is due the moment a leaf lands");
+        let raw = r#"{"line": "Checks the balance before every spend.", "routing": [], "merge_into": ""}"#;
+        apply_redistilled(&mut g, "money-style", raw, 2_000).unwrap();
+        assert!(!g.distillants["money-style"].is_bare());
+        assert_eq!(pressure(&g, "money-style"), 0);
+    }
+
+    #[test]
+    fn one_moved_axis_is_enough_to_refresh_a_written_portrait() {
+        let mut g = Graph::seed();
+        for id in ["communication", "money-style", "temperament", PROFILE_APEX] {
+            let m = g.distillants.get_mut(id).unwrap();
+            m.line = format!("{id} line.");
+            m.line_changed_at = 1_000;
+            m.consolidated_at = 1_000;
+        }
+        assert_eq!(drift(&g, PROFILE_APEX), 0, "a fresh portrait holds");
+        g.distillants.get_mut("money-style").unwrap().line_changed_at = 2_000;
+        assert_eq!(drift(&g, PROFILE_APEX), DRIFT_CHILD_LINE_SOLE_EVIDENCE);
+        assert_eq!(due(&g).as_deref(), Some(PROFILE_APEX), "the portrait is stale the moment an axis moves");
+
+        // A distillant that carries leaves of its own weighs one changed
+        // child as the fraction of the evidence it is.
+        let l = Leaf::new("own".into(), Species::State, "a fact of its own".into(), vec!["money".into()], 1_000);
+        g.leaves.insert(l.id.clone(), l);
+        bare_child(&mut g, "money/rent", "money");
+        g.distillants.get_mut("money").unwrap().consolidated_at = 1_000;
+        g.distillants.get_mut("money/rent").unwrap().line_changed_at = 2_000;
+        assert_eq!(drift(&g, "money"), DRIFT_CHILD_LINE);
+    }
+
+    #[test]
+    fn the_apex_is_due_once_an_axis_line_exists_and_is_distilled_from_the_axes() {
+        let mut g = Graph::seed();
+        let l = Leaf::new("checks-balance".into(), Species::Disposition, "checks the balance before any spend".into(), vec!["money-style".into()], 1_000);
+        g.leaves.insert(l.id.clone(), l);
+        let raw = r#"{"line": "Checks the balance before every spend.", "routing": [], "merge_into": ""}"#;
+        apply_redistilled(&mut g, "money-style", raw, 2_000).unwrap();
+        assert_eq!(due(&g).as_deref(), Some(PROFILE_APEX), "a written axis is drift on the bare apex");
+        let body = redistill_body(&g, PROFILE_APEX).unwrap();
+        assert!(body.contains("This is the profile apex"), "{body}");
+        assert!(body.contains("- money-style — Checks the balance before every spend."), "the axis lines are the evidence: {body}");
+        let raw = r#"{"line": "Careful with every euro of their own.", "routing": [], "merge_into": ""}"#;
+        apply_redistilled(&mut g, PROFILE_APEX, raw, 3_000).unwrap();
+        assert_eq!(due(&g), None, "the portrait absorbed the axes");
+        assert!(crate::projection::render_profile(&g, 3_000).starts_with("- character — Careful with every euro of their own.\n  - communication"), "{}", crate::projection::render_profile(&g, 3_000));
+    }
+
+    #[test]
+    fn pressure_counts_fat_and_residual() {
+        let mut g = written_seed();
         assert_eq!(pressure(&g, "money"), 0);
         assert_eq!(pressure(&g, "ghost"), 0);
         for i in 0..10 {
@@ -1006,7 +1106,7 @@ mod tests {
 
     #[test]
     fn due_picks_worst_offender_and_quiets_after_a_pass() {
-        let mut g = Graph::seed();
+        let mut g = written_seed();
         for i in 0..10 {
             leaf_under(&mut g, &format!("m{i}"), "money", 1_000);
         }
@@ -1048,7 +1148,7 @@ mod tests {
 
     #[test]
     fn drift_counts_leaves_that_moved_against_their_text() {
-        let mut g = Graph::seed();
+        let mut g = written_seed();
         g.distillants.get_mut("money").unwrap().consolidated_at = 1_500;
         leaf_under(&mut g, "rent", "money", 1_000);
         leaf_under(&mut g, "lease", "money", 1_000);
@@ -1075,7 +1175,7 @@ mod tests {
 
     #[test]
     fn a_forget_under_a_distillant_is_drift_until_the_next_pass() {
-        let mut g = Graph::seed();
+        let mut g = written_seed();
         leaf_under(&mut g, "katsu", "life", 1_000);
         leaf_under(&mut g, "walks", "life", 1_000);
         g.distillants.get_mut("life").unwrap().consolidated_at = 1_500;
@@ -1110,7 +1210,8 @@ mod tests {
         let changed = r#"{"line": "Marooned; the island is home now.", "routing": []}"#;
         apply_redistilled(&mut g, "life/island", changed, 2_500).unwrap();
         assert_eq!(g.distillants["life/island"].line_changed_at, 2_500);
-        assert_eq!(drift(&g, "life"), DRIFT_CHILD_LINE, "a changed child line drifts the parent");
+        // `life` holds no leaves here, so its one child is its whole evidence.
+        assert_eq!(drift(&g, "life"), DRIFT_CHILD_LINE_SOLE_EVIDENCE, "a changed child line drifts the parent");
         assert_eq!(drift(&g, "life/island"), 0, "the freshly passed child itself is clean");
     }
 
@@ -1148,7 +1249,7 @@ mod tests {
 
     #[test]
     fn auto_step_consolidates_the_worst_offender_once() {
-        let mut g = Graph::seed();
+        let mut g = written_seed();
         for i in 0..12 {
             leaf_under(&mut g, &format!("l{i}"), "life", 1_000);
         }
@@ -1170,7 +1271,7 @@ mod tests {
 
     #[test]
     fn stream_fold_distills_oldest_batch_with_model_text() {
-        let mut g = Graph::seed();
+        let mut g = written_seed();
         let first = g.push_episode("sold Xury".into(), vec![], 1, None);
         let mut l =
             Leaf::new("xury".into(), Species::State, "Xury sold.".into(), vec!["people".into()], 1);

@@ -199,14 +199,20 @@ pub struct Distillant {
 }
 
 impl Distillant {
-    /// A distillant is bare when no pass has written its judgment: the
-    /// line is empty, or only repeats the label (the shape a stub takes
-    /// when a leaf names a distillant before anything distills it). Bare
-    /// is a state, not a line: every render says so instead of printing a
-    /// label as if it were a judgment.
+    /// A distillant is bare when nothing has written its judgment. Every
+    /// write that means one — a harvest declaring the distillant, a pass
+    /// rewriting it — stamps `line_changed_at`, so an unstamped line is
+    /// text that was never a judgment: a seed description, a stub named
+    /// by a leaf before anything distilled it. A stamped line that is
+    /// empty or only repeats the label says nothing either. Bare is a
+    /// state, not a line: every render says so instead of printing a
+    /// description as if it were a judgment, and consolidation treats it
+    /// as due the moment there is material to judge.
     pub fn is_bare(&self) -> bool {
+        let never_written = self.line_changed_at == 0;
         let line = self.line.trim();
-        line.is_empty() || line.eq_ignore_ascii_case(self.label.trim())
+        let says_nothing = line.is_empty() || line.eq_ignore_ascii_case(self.label.trim());
+        never_written || says_nothing
     }
 
     /// The one-line text every render shows for this distillant: its line,
@@ -216,6 +222,22 @@ impl Distillant {
             format!("{} (no line yet)", self.label)
         } else {
             self.line.clone()
+        }
+    }
+
+    /// A distillant nothing has judged yet: no line, no stamps.
+    pub fn bare(id: &str, tree: Tree, label: &str, parents: Vec<Id>, routing: Vec<Id>) -> Distillant {
+        Distillant {
+            id: id.to_string(),
+            tree,
+            label: label.to_string(),
+            line: String::new(),
+            routing,
+            parents,
+            misc_count: 0,
+            consolidated_at: 0,
+            line_changed_at: 0,
+            forgotten_at: 0,
         }
     }
 }
@@ -253,45 +275,56 @@ const DIGEST_TEXT_BUDGET: usize = 1500;
 /// polishes episodes carrying it; a distilled digest never starts with this.
 pub const MECH_DIGEST_PREFIX: &str = "[digest of ";
 
+/// The profile tree's single root: the whole-person estimate. Its line is
+/// the character sketch, distilled from the axis lines below it; every
+/// profile axis hangs under it, so the pinned tier opens with who this
+/// person is before it lists how they tend.
+pub const PROFILE_APEX: &str = "character";
+
 impl Graph {
     /// The near-universal crown. Personal signature grows in the middle layers;
     /// the harvester creates those. Roots converge fast for everyone.
+    ///
+    /// Every seed is born bare: a crown's line is a judgment about this
+    /// person, and nothing has judged yet. The first pass over a crown
+    /// with material under it writes the first line.
     pub fn seed() -> Graph {
         let mut g = Graph::default();
         let crown = [
-            (Tree::Registry, "people", "People", "Family, friends, contacts, counterparties.",
+            (Tree::Registry, "people", "People", Vec::new(),
              vec!["friend", "family", "sister", "brother", "mom", "dad", "partner", "wife", "husband", "boss", "landlord"]),
-            (Tree::Registry, "money", "Money", "Accounts, obligations, income, spending.",
+            (Tree::Registry, "money", "Money", Vec::new(),
              vec!["money", "pay", "paid", "payment", "rent", "bill", "bills", "budget", "salary", "price", "cost", "owe", "bought", "buy"]),
-            (Tree::Registry, "work", "Work", "Job, projects, professional life.",
+            (Tree::Registry, "work", "Work", Vec::new(),
              vec!["work", "job", "project", "meeting", "deadline", "office", "client"]),
-            (Tree::Registry, "life", "Life", "Health, home, habits, interests.",
+            (Tree::Registry, "life", "Life", Vec::new(),
              vec!["home", "health", "gym", "trip", "travel", "hobby", "weekend"]),
-            (Tree::Profile, "communication", "Communication style", "How they like to be spoken to.",
-             vec![]),
-            (Tree::Profile, "money-style", "Money style", "How they handle money: discipline, risk, planning.",
-             vec![]),
-            (Tree::Profile, "temperament", "Temperament", "Disposition and decision-making style.",
-             vec![]),
+            (Tree::Profile, PROFILE_APEX, "Character", Vec::new(), vec![]),
+            (Tree::Profile, "communication", "Communication style", vec![PROFILE_APEX], vec![]),
+            (Tree::Profile, "money-style", "Money style", vec![PROFILE_APEX], vec![]),
+            (Tree::Profile, "temperament", "Temperament", vec![PROFILE_APEX], vec![]),
         ];
-        for (tree, id, label, line, routing) in crown {
-            g.distillants.insert(
-                id.to_string(),
-                Distillant {
-                    id: id.to_string(),
-                    tree,
-                    label: label.to_string(),
-                    line: line.to_string(),
-                    routing: routing.into_iter().map(|s| s.to_string()).collect(),
-                    parents: Vec::new(),
-                    misc_count: 0,
-                    consolidated_at: 0,
-                    line_changed_at: 0,
-                    forgotten_at: 0,
-                },
-            );
+        let owned = |ids: Vec<&str>| ids.into_iter().map(str::to_string).collect();
+        for (tree, id, label, parents, routing) in crown {
+            g.distillants.insert(id.to_string(), Distillant::bare(id, tree, label, owned(parents), owned(routing)));
         }
         g
+    }
+
+    /// Where a distillant hangs. Its parents become an antichain; in the
+    /// profile tree they are never nowhere — an axis with no parent of its
+    /// own is an axis of the apex, and the apex alone is a root.
+    pub fn home_parents(&self, id: &str, tree: Tree, parents: Vec<Id>) -> Vec<Id> {
+        let is_apex = id == PROFILE_APEX;
+        if is_apex {
+            return Vec::new();
+        }
+        let homes = self.antichain(parents);
+        let axis_without_parent = tree == Tree::Profile && homes.is_empty();
+        if axis_without_parent {
+            return vec![PROFILE_APEX.to_string()];
+        }
+        homes
     }
 
     pub fn leaves_under(&self, distillant_id: &str) -> Vec<&Leaf> {
@@ -528,19 +561,33 @@ impl Graph {
         })
     }
 
-    /// Restore the parent-set invariant over the whole graph: every leaf's
-    /// and distillant's parents become an antichain. Ops keep the invariant
-    /// as they go; this is for graphs written before it held. Returns the
-    /// ids whose parent set changed.
-    pub fn normalize_parents(&mut self) -> Vec<Id> {
-        let mut changed: Vec<Id> = Vec::new();
+    /// Restore the structural invariants over the whole graph: the profile
+    /// tree has the apex as its one root with every axis under it, and
+    /// every leaf's and distillant's parents form an antichain. Ops keep
+    /// both as they go; this is for graphs written before they held.
+    pub fn normalize(&mut self) -> Normalized {
+        let mut out = Normalized::default();
+        if !self.distillants.contains_key(PROFILE_APEX) {
+            self.distillants.insert(
+                PROFILE_APEX.to_string(),
+                Distillant::bare(PROFILE_APEX, Tree::Profile, "Character", Vec::new(), Vec::new()),
+            );
+            out.apex_created = true;
+        }
         let distillant_ids: Vec<Id> = self.distillants.keys().cloned().collect();
         for id in distillant_ids {
-            let parents = self.distillants[&id].parents.clone();
-            let homes = self.antichain(parents.clone());
-            if homes != parents {
-                self.distillants.get_mut(&id).expect("listed above").parents = homes;
-                changed.push(id);
+            let m = &self.distillants[&id];
+            let parents = m.parents.clone();
+            let homes = self.home_parents(&id, m.tree, parents.clone());
+            if homes == parents {
+                continue;
+            }
+            let homed_under_apex = parents.is_empty() && homes == [PROFILE_APEX];
+            self.distillants.get_mut(&id).expect("listed above").parents = homes;
+            if homed_under_apex {
+                out.homed_under_apex.push(id);
+            } else {
+                out.antichained.push(id);
             }
         }
         let leaf_ids: Vec<Id> = self.leaves.keys().cloned().collect();
@@ -549,10 +596,10 @@ impl Graph {
             let homes = self.antichain(parents.clone());
             if homes != parents {
                 self.leaves.get_mut(&id).expect("listed above").parents = homes;
-                changed.push(id);
+                out.antichained.push(id);
             }
         }
-        changed
+        out
     }
 
     /// The distillant `id` and every distillant reachable below it (a
@@ -573,6 +620,24 @@ impl Graph {
             i += 1;
         }
         out
+    }
+}
+
+/// What `Graph::normalize` repaired on a graph written before the current
+/// invariants held. Empty on a graph that already holds them.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Normalized {
+    /// Ids (leaves and distillants) whose parent set was reduced to an antichain.
+    pub antichained: Vec<Id>,
+    /// Profile distillants that stood as roots and now hang under the apex.
+    pub homed_under_apex: Vec<Id>,
+    /// Whether the apex itself was missing and had to be created.
+    pub apex_created: bool,
+}
+
+impl Normalized {
+    pub fn is_empty(&self) -> bool {
+        self.antichained.is_empty() && self.homed_under_apex.is_empty() && !self.apex_created
     }
 }
 
@@ -621,7 +686,35 @@ mod tests {
         assert!(g.distillants.contains_key("money"));
         assert!(g.distillants.contains_key("communication"));
         assert_eq!(g.roots(Tree::Registry).len(), 4);
-        assert_eq!(g.roots(Tree::Profile).len(), 3);
+        let profile_roots = g.roots(Tree::Profile);
+        assert_eq!(profile_roots.len(), 1, "the apex is the profile's one root");
+        assert_eq!(profile_roots[0].id, PROFILE_APEX);
+        let mut axes: Vec<&str> = g.child_distillants(PROFILE_APEX).iter().map(|c| c.id.as_str()).collect();
+        axes.sort();
+        assert_eq!(axes, vec!["communication", "money-style", "temperament"]);
+        assert!(g.distillants.values().all(|m| m.is_bare()), "every seed is born bare — nothing has judged yet");
+    }
+
+    #[test]
+    fn a_line_is_a_judgment_only_once_something_stamped_it() {
+        let mut g = Graph::seed();
+        // The legacy seed shape: a description in the line slot, never stamped.
+        g.distillants.get_mut("money-style").unwrap().line = "How they handle money: discipline, risk, planning.".into();
+        assert!(g.distillants["money-style"].is_bare(), "an unstamped description is not a judgment");
+        assert_eq!(g.distillants["money-style"].headline(), "Money style (no line yet)");
+        g.distillants.get_mut("money-style").unwrap().line_changed_at = 7;
+        assert!(!g.distillants["money-style"].is_bare(), "a stamped line is one");
+        g.distillants.get_mut("money-style").unwrap().line = String::new();
+        assert!(g.distillants["money-style"].is_bare(), "a stamped empty line still says nothing");
+    }
+
+    #[test]
+    fn home_parents_keeps_the_profile_rooted_at_the_apex() {
+        let g = Graph::seed();
+        assert_eq!(g.home_parents("risk-appetite", Tree::Profile, vec![]), vec![PROFILE_APEX], "a parentless axis is an axis of the apex");
+        assert_eq!(g.home_parents("communication/bluntness", Tree::Profile, vec!["communication".into()]), vec!["communication"]);
+        assert_eq!(g.home_parents(PROFILE_APEX, Tree::Profile, vec!["temperament".into()]), Vec::<Id>::new(), "the apex is never re-homed");
+        assert_eq!(g.home_parents("people", Tree::Registry, vec![]), Vec::<Id>::new(), "registry crowns stay roots");
     }
 
     #[test]
@@ -707,21 +800,9 @@ mod tests {
     }
 
     fn bare_distillant(g: &mut Graph, id: &str, parents: &[&str]) {
-        g.distillants.insert(
-            id.into(),
-            Distillant {
-                id: id.into(),
-                tree: Tree::Registry,
-                label: id.rsplit('/').next().unwrap_or(id).replace('-', " "),
-                line: String::new(),
-                routing: vec![],
-                parents: parents.iter().map(|p| p.to_string()).collect(),
-                misc_count: 0,
-                consolidated_at: 0,
-                line_changed_at: 0,
-                forgotten_at: 0,
-            },
-        );
+        let label = id.rsplit('/').next().unwrap_or(id).replace('-', " ");
+        let parents = parents.iter().map(|p| p.to_string()).collect();
+        g.distillants.insert(id.into(), Distillant::bare(id, Tree::Registry, &label, parents, Vec::new()));
     }
 
     fn leaf_with_evidence(g: &mut Graph, id: &str, parents: &[&str], evidence: &[&str]) {
@@ -813,26 +894,40 @@ mod tests {
         bare_distillant(&mut g, "work/x-report", &["work"]);
         assert!(g.distillants["work/x-report"].is_bare());
         assert_eq!(g.distillants["work/x-report"].headline(), "x report (no line yet)");
+        let money = g.distillants.get_mut("money").unwrap();
+        money.line = "Runs one wallet on a tight budget.".into();
+        money.line_changed_at = 5;
         assert_eq!(g.distillants["money"].headline(), g.distillants["money"].line);
         // The legacy stub shape: a line that only repeats the label is no line.
-        g.distillants.get_mut("work/x-report").unwrap().line = "X Report".into();
+        let stub = g.distillants.get_mut("work/x-report").unwrap();
+        stub.line = "X Report".into();
+        stub.line_changed_at = 5;
         assert!(g.distillants["work/x-report"].is_bare());
         g.distillants.get_mut("work/x-report").unwrap().line = "Runs the X report for friends.".into();
         assert!(!g.distillants["work/x-report"].is_bare());
     }
 
     #[test]
-    fn normalize_parents_repairs_a_graph_written_before_the_invariant() {
+    fn normalize_repairs_a_graph_written_before_the_invariants() {
         let mut g = Graph::seed();
         bare_distillant(&mut g, "work/video", &["work"]);
         bare_distillant(&mut g, "work/video/prompt", &["work", "work/video"]);
         leaf_with_evidence(&mut g, "take", &["work/video/prompt", "work"], &[]);
         leaf_with_evidence(&mut g, "fine", &["money"], &[]);
-        let changed = g.normalize_parents();
-        assert_eq!(changed, vec!["work/video/prompt", "take"]);
+        // The pre-apex profile shape: axes standing as roots, no apex at all.
+        g.distillants.remove(PROFILE_APEX);
+        for axis in ["communication", "money-style", "temperament"] {
+            g.distillants.get_mut(axis).unwrap().parents.clear();
+        }
+        let repaired = g.normalize();
+        assert_eq!(repaired.antichained, vec!["work/video/prompt", "take"]);
+        assert!(repaired.apex_created);
+        assert_eq!(repaired.homed_under_apex, vec!["communication", "money-style", "temperament"]);
         assert_eq!(g.distillants["work/video/prompt"].parents, vec!["work/video"]);
         assert_eq!(g.leaves["take"].parents, vec!["work/video/prompt"]);
-        assert!(g.normalize_parents().is_empty(), "idempotent");
+        assert_eq!(g.roots(Tree::Profile).len(), 1);
+        assert!(g.distillants[PROFILE_APEX].is_bare());
+        assert!(g.normalize().is_empty(), "idempotent");
     }
 
     #[test]
