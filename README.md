@@ -43,7 +43,7 @@ Three stores, one routing table, two motions:
 |---|---|---|
 | **Stream** | time-ordered episodes | immutable, accumulate, digest, fade |
 | **Registry** | noun-shaped tree of state facts | current value + supersession history (*states switch*) |
-| **Profile** | trait-shaped tree of dispositions | scored axes with nudge trajectories (*dispositions drift*) |
+| **Profile** | one apex (the character estimate) over a trait-shaped tree of dispositions | scored axes with nudge trajectories (*dispositions drift*); the apex line is distilled from the axis lines |
 
 **Write path (ambient, no remember-tool).** Every finished turn goes to the
 harvester, which emits structured ops — new leaves, supports / contradicts /
@@ -64,7 +64,8 @@ carries are mirrored into its routing automatically; models write honest
 lines, the runtime compiles them.
 
 **Read path (mechanical, two motions).** The profile rides pinned in every
-request. Per turn, the message is lexically matched against the routing
+request, opening with the `character` line — the engine's standing estimate of
+who this person is, redistilled as the axes beneath it move. Per turn, the message is lexically matched against the routing
 table; activated distillants project their best leaves (ranked by match
 score, then salience) under a fixed budget. For interrogation beyond what
 projection catches, the agent walks the map itself: an `open_memory` tool

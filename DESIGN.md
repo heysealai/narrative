@@ -65,7 +65,7 @@ late-month`). Split by species, each in its native topology:
 |---|---|---|---|
 | **Stream** | time-ordered log | episodes | immutable, accumulate, fade/compress |
 | **Registry** | noun-shaped tree (people, accounts, obligations, work...) | state facts | current value + supersession history |
-| **Profile** | trait-shaped shallow tree (spend discipline, risk appetite, communication style...) | dispositions | scored axes that drift, with trajectories |
+| **Profile** | one apex — the character estimate — over a trait-shaped shallow tree (spend discipline, risk appetite, communication style...) | dispositions | scored axes that drift, with trajectories; the apex line is distilled from the axis lines |
 
 The stream is the **shared evidence pool**: one episode ("paid rent late in May") supports a
 registry history and nudges a profile axis. Both trees hold pointers into it; episodes are
@@ -80,7 +80,9 @@ Both trees are DAGs — a leaf may hang under multiple distillants ("rent latene
 - **Profile = pinned tier.** Small, slow-changing, relevant to almost every turn (how to
   talk to this person, how cautious to be). The whole profile rides inline always — and
   because it changes rarely, it lives in the *cacheable* per-user system block without
-  busting prompt cache.
+  busting prompt cache. The tree's single root, `character`, carries the whole-person
+  estimate consolidation distills from the axis lines beneath it — the pinned block
+  opens with who this person is, then how they tend.
 - **Registry + stream = retrieved tier.** Big, fast-growing, situationally relevant.
   Retrieved off-context per turn; injected in the per-turn (cache-safe, messages-array)
   slot.
@@ -261,7 +263,8 @@ Leaf {
 Distillant {
   id, label,
   line,                // one line; the cached judgment — keep it fresh or rot returns
-                       // (empty, or equal to the label = BARE: no pass has written it yet)
+                       // (BARE until a harvest or pass stamps line_changed_at: an unstamped
+                       // line was never a judgment; empty or label-only says nothing either)
   routing_map: [keywords, aliases, anchors],   // compiled for mechanical projection;
                                                // facet terms only while the line carries them
   parents: [distillant ids], children: [ids],   // parents are an antichain (no ancestor beside its descendant)
@@ -309,7 +312,8 @@ machinery (background subagents). Any host needs equivalents:
 1. Consolidation scheduling specifics (model-deferred + watermark bottom line — what's the
    concrete trigger set? residual thresholds? idle time?).
 2. Disposition axis discovery — are profile axes emergent like categories, or seeded from a
-   small universal set and personalized below?
+   small universal set and personalized below? (Built as the latter: three seeded axes
+   under the apex, the harvester personalizes below them.)
 3. Projection injection format — how do opened leaves render into the turn (block shape,
    token budget per turn, dedup against recent injections)?
 4. Multi-resolution answering — when should the agent answer from a line vs opening
