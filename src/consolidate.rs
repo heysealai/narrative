@@ -25,12 +25,16 @@ A distillant's line is its behavioral median: one line that summarizes what the 
 leaves below collectively say about the user — the central tendency, not a list. \
 High-importance exceptions are not averaged away; if one leaf is a critical outlier, \
 the line may flag it. Routing terms are the recall vocabulary: words or short \
-phrases a future message about this topic would plausibly contain. Keep existing \
-terms unless they are wrong; add what is missing. Matching is exact, no stemming: \
-include the inflected forms a message would actually contain (payment AND \
-payments). Spend routing terms on referring expressions — names, aliases, \
-anchors, topics; evaluative vocabulary (trust, regret, fear...) is derived from \
-the line automatically and needs no routing entries.\n\
+phrases a future message about this topic would plausibly contain. Return the \
+COMPLETE routing set you want this distillant to carry: it replaces the current \
+one, so keep what is right, drop what is not, add what is missing. Routing is a \
+referring-expression index, not a word list — names, aliases, anchors, topics, \
+with the inflected forms a message would actually contain (payment AND payments; \
+matching is exact, no stemming). Never keep episode detail (numbers, one-off \
+phrasings, item labels) or generic phrases a message about anything could \
+contain: every stray term routes unrelated messages here. Evaluative vocabulary \
+(trust, regret, fear...) is derived from the line automatically and needs no \
+routing entries.\n\
 \n\
 The line is also the scent retrieval follows: a question can only descend \
 here if the relevant vocabulary appears in this line (or the routing). When the \
@@ -54,6 +58,12 @@ clustered leaf under its child with `moves` (a move replaces the leaf's whole \
 parent set). Leaves you do not move stay where they are.\n\
 - MERGE: when two leaves state the same fact, absorb the lesser into the \
 canonical one with `merge_leaves`; evidence and belief counts combine.\n\
+- MERGE AWAY: when this distillant turns out to be the same thing as another \
+one listed under 'Same-named distillants elsewhere', name it in `merge_into`; \
+this distillant is absorbed into it (leaves, children, routing) and deleted, and \
+the line and routing you return are ignored. A distillant shown with no line \
+was created bare (a fact named it before any pass wrote it): give it its first \
+line, or merge it away.\n\
 Restructure only on real pressure — a tidy distillant needs nothing but a fresh \
 line. The line you return describes this distillant AFTER your changes.";
 
@@ -62,7 +72,8 @@ fn redistill_schema() -> Value {
         "type": "object",
         "properties": {
             "line": {"type": "string", "description": "one line, the behavioral median; advertise evaluative facets the leaves carry (trust, regret, fear, pride)"},
-            "routing": {"type": "array", "items": {"type": "string"}, "description": "recall vocabulary: referring expressions, aliases, anchors, topics; evaluative vocabulary is derived from the line automatically"},
+            "routing": {"type": "array", "items": {"type": "string"}, "description": "the COMPLETE recall vocabulary this distillant should carry (replaces the current set): referring expressions, aliases, anchors, topics; evaluative vocabulary is derived from the line automatically"},
+            "merge_into": {"type": "string", "description": "id of an existing distillant this one duplicates (from 'Same-named distillants elsewhere'); this distillant is absorbed into it and deleted. Empty string when it stands on its own."},
             "distillants": {
                 "description": "New child distillants to split this one into; empty when no split is needed.",
                 "type": "array",
@@ -105,7 +116,7 @@ fn redistill_schema() -> Value {
                 }
             }
         },
-        "required": ["line", "routing", "distillants", "moves", "merge_leaves"],
+        "required": ["line", "routing", "merge_into", "distillants", "moves", "merge_leaves"],
         "additionalProperties": false
     })
 }
@@ -114,6 +125,8 @@ fn redistill_schema() -> Value {
 struct Redistilled {
     line: String,
     routing: Vec<String>,
+    #[serde(default)]
+    merge_into: String,
     #[serde(default)]
     distillants: Vec<NewChild>,
     #[serde(default)]
@@ -147,11 +160,16 @@ struct MergeSpec {
 /// does not exist.
 fn redistill_body(graph: &Graph, distillant_id: &str) -> Option<String> {
     let m = graph.distillants.get(distillant_id)?;
+    let current_line = if m.is_bare() {
+        "(none — created bare; write its first line, or merge it away)".to_string()
+    } else {
+        m.line.clone()
+    };
     let mut body = format!(
         "Distillant: {} (label: {})\nCurrent line: {}\nCurrent routing: {}\n\nLeaves:\n",
         m.id,
         m.label,
-        m.line,
+        current_line,
         m.routing.join(", ")
     );
     let leaves = graph.leaves_under(distillant_id);
@@ -179,10 +197,35 @@ fn redistill_body(graph: &Graph, distillant_id: &str) -> Option<String> {
     if !children.is_empty() {
         body.push_str("Child distillants:\n");
         for c in children {
-            let _ = writeln!(body, "- {} — {}", c.id, c.line);
+            let _ = writeln!(body, "- {} — {}", c.id, c.headline());
+        }
+    }
+    let namesakes = same_named_elsewhere(graph, distillant_id);
+    if !namesakes.is_empty() {
+        body.push_str("Same-named distillants elsewhere (merge_into one of these if this is the same thing):\n");
+        for n in namesakes {
+            let _ = writeln!(body, "- {} — {}", n.id, n.headline());
         }
     }
     Some(body)
+}
+
+/// Distillants in the same tree whose terminal path segment equals this
+/// one's — the shape a duplicate takes when a harvest names a topic under
+/// a second parent (`work/x-report` beside `life/hacks/x-report`). Shown
+/// to the pass so a merge is a choice it can make, never something it
+/// would have to already know about.
+fn same_named_elsewhere<'g>(graph: &'g Graph, distillant_id: &str) -> Vec<&'g crate::model::Distillant> {
+    let Some(m) = graph.distillants.get(distillant_id) else { return Vec::new() };
+    let segment = |id: &str| id.rsplit('/').next().unwrap_or(id).to_string();
+    let mine = segment(distillant_id);
+    let mut out: Vec<&crate::model::Distillant> = graph
+        .distillants
+        .values()
+        .filter(|o| o.id != distillant_id && o.tree == m.tree && segment(&o.id) == mine)
+        .collect();
+    out.sort_by(|a, b| a.id.cmp(&b.id));
+    out
 }
 
 /// The keyless prompt: system contract, the exact output schema, and one
@@ -210,6 +253,36 @@ pub fn apply_redistilled(
     };
     let tree = m.tree;
     let out: Redistilled = serde_json::from_str(raw)?;
+
+    // A merge-away ends the pass: the distillant is gone, its line and
+    // routing moot. An invalid target (missing, self, other tree) is traced
+    // by the merge and the pass continues as a plain redistill.
+    let merges_away = !out.merge_into.trim().is_empty();
+    if merges_away {
+        let into = out.merge_into.trim().to_string();
+        let mut traces = harvest::apply_ops(
+            graph,
+            vec![Op::MergeDistillant { from: distillant_id.to_string(), into }],
+            now,
+        );
+        let merged = !graph.distillants.contains_key(distillant_id);
+        if merged {
+            return Ok(traces);
+        }
+        traces.push(format!("merge_into rejected — {distillant_id} redistilled in place"));
+        return apply_redistilled_in_place(graph, distillant_id, tree, out, now, traces);
+    }
+    apply_redistilled_in_place(graph, distillant_id, tree, out, now, Vec::new())
+}
+
+fn apply_redistilled_in_place(
+    graph: &mut Graph,
+    distillant_id: &str,
+    tree: Tree,
+    out: Redistilled,
+    now: u64,
+    mut traces: Vec<String>,
+) -> Result<Vec<String>> {
     let new_children: Vec<String> = out.distillants.iter().map(|c| c.id.clone()).collect();
 
     // Structural ops first; the returned line describes the result.
@@ -230,7 +303,9 @@ pub fn apply_redistilled(
     for mg in out.merge_leaves {
         ops.push(Op::MergeLeaf { from: mg.from, into: mg.into });
     }
-    let mut traces = if ops.is_empty() { Vec::new() } else { harvest::apply_ops(graph, ops, now) };
+    if !ops.is_empty() {
+        traces.extend(harvest::apply_ops(graph, ops, now));
+    }
 
     if let Some(m) = graph.distillants.get_mut(distillant_id)
         && m.line != out.line
@@ -241,9 +316,24 @@ pub fn apply_redistilled(
         // identical leaves the stamp alone — the cascade stops here.
         m.line_changed_at = now;
     }
-    // The fresh line is the source of truth: sync derived facet routing to
-    // it (prune what it dropped, mirror what it carries), then add the
-    // response's terms through the gate.
+    // Routing is REPLACED, never accreted: the response carries the complete
+    // topical set, and routing only ever grew before this pass (harvest
+    // aliases append). The fresh line stays the source of facet truth —
+    // the derived families are mirrored from it, then the response's terms
+    // enter through the same gate as always.
+    if let Some(m) = graph.distillants.get_mut(distillant_id) {
+        let dropped: Vec<String> = m
+            .routing
+            .iter()
+            .filter(|t| !out.routing.iter().any(|r| r.trim().eq_ignore_ascii_case(t)))
+            .filter(|t| crate::routing::facet_family(t).is_none())
+            .cloned()
+            .collect();
+        m.routing.clear();
+        if !dropped.is_empty() {
+            traces.push(format!("✂ routing {} − {} (not in the pass's set)", distillant_id, dropped.join(", ")));
+        }
+    }
     harvest::sync_facet_routing(graph, distillant_id, &mut traces);
     harvest::add_routing(graph, distillant_id, &out.routing, &mut traces);
     if let Some(m) = graph.distillants.get_mut(distillant_id) {
@@ -286,6 +376,9 @@ pub fn redistill(llm: &dyn Llm, graph: &mut Graph, distillant_id: &str, now: u64
 pub const FAT_LEAF_THRESHOLD: usize = 8;
 /// Pressure at which the automatic after-harvest pass fires.
 pub const PRESSURE_TRIGGER: u32 = 3;
+/// Pressure a bare distillant carries by itself: no line means no cached
+/// judgment at all, which is the trigger's worth of staleness on its own.
+pub const BARE_PRESSURE: u32 = PRESSURE_TRIGGER;
 
 /// Drift weight of a leaf that moved against its own text since the pass
 /// (contradiction, supersession, disposition flip) — the strongest staleness
@@ -299,8 +392,10 @@ pub const DRIFT_CHILD_LINE: u32 = 1;
 /// longer follows from what hangs below it. Derived, never stored — the
 /// timestamps already in the graph are compared against `consolidated_at`,
 /// so a redistill pass zeroes it by construction. Counts leaves that moved
-/// against their own text and children whose lines materially changed; mere
-/// reinforcement and new leaves are not drift (new leaves are fat).
+/// against their own text, a forget that removed something held here (the
+/// line summarized what no longer exists), and children whose lines
+/// materially changed; mere reinforcement and new leaves are not drift
+/// (new leaves are fat).
 pub fn drift(graph: &Graph, distillant_id: &str) -> u32 {
     let Some(m) = graph.distillants.get(distillant_id) else { return 0 };
     let t = m.consolidated_at;
@@ -314,17 +409,20 @@ pub fn drift(graph: &Graph, distillant_id: &str) -> u32 {
         .iter()
         .filter(|c| c.line_changed_at > t)
         .count() as u32;
-    against * DRIFT_AGAINST + child_lines * DRIFT_CHILD_LINE
+    let forgotten_under = u32::from(m.forgotten_at > t);
+    (against + forgotten_under) * DRIFT_AGAINST + child_lines * DRIFT_CHILD_LINE
 }
 
 /// Consolidation pressure on one distillant: how far past fat it has grown,
 /// plus its residual counter (facts parked here for lack of anywhere better),
-/// plus semantic drift (the cached line's evidence moved on). One queue:
+/// plus semantic drift (the cached line's evidence moved on), plus the
+/// trigger's worth when it is bare (no line was ever written). One queue:
 /// structural rot and semantic rot compete for the same per-turn step.
 pub fn pressure(graph: &Graph, distillant_id: &str) -> u32 {
     let Some(m) = graph.distillants.get(distillant_id) else { return 0 };
     let fat = graph.leaves_under(distillant_id).len().saturating_sub(FAT_LEAF_THRESHOLD);
-    fat as u32 + m.misc_count + drift(graph, distillant_id)
+    let bare = if m.is_bare() { BARE_PRESSURE } else { 0 };
+    fat as u32 + m.misc_count + drift(graph, distillant_id) + bare
 }
 
 /// Due = at/over the trigger AND something actually happened since the last
@@ -592,6 +690,17 @@ pub fn stats(graph: &Graph) -> String {
         }
     }
 
+    let mut bare: Vec<&str> = graph
+        .distillants
+        .values()
+        .filter(|m| m.is_bare())
+        .map(|m| m.id.as_str())
+        .collect();
+    bare.sort();
+    if !bare.is_empty() {
+        let _ = writeln!(out, "bare distillants (no line yet — a pass writes one or merges them away): {}", bare.join(", "));
+    }
+
     let mut drifted: Vec<(&str, u32)> = graph
         .distillants
         .values()
@@ -711,7 +820,8 @@ mod tests {
         assert!(!r.contains(&"regret".to_string()), "orphan of the old line pruned: {traces:?}");
         assert!(!r.contains(&"regrets".to_string()), "new facet gated by the new line");
         assert!(!r.contains(&"trust".to_string()), "gated");
-        assert!(r.contains(&"lease".to_string()) && r.contains(&"landlord".to_string()));
+        assert!(!r.contains(&"lease".to_string()), "a term the pass did not return is dropped: routing is replaced, not accreted: {traces:?}");
+        assert!(r.contains(&"landlord".to_string()));
     }
 
     #[test]
@@ -773,6 +883,109 @@ mod tests {
         );
     }
 
+    #[test]
+    fn redistill_replaces_routing_instead_of_accreting() {
+        let mut g = Graph::seed();
+        {
+            let m = g.distillants.get_mut("money").unwrap();
+            m.routing = vec!["no. 001".into(), "no. 002".into(), "metadata".into(), "rent".into()];
+        }
+        let raw = r#"{"line": "Rent dominates.", "routing": ["rent", "landlord"], "merge_into": ""}"#;
+        let traces = apply_redistilled(&mut g, "money", raw, 2_000).unwrap();
+        assert_eq!(g.distillants["money"].routing, vec!["rent", "landlord"], "{traces:?}");
+        assert!(traces.iter().any(|t| t.contains("✂ routing money − no. 001, no. 002, metadata")), "{traces:?}");
+        assert!(render_redistill_prompt(&g, "money").unwrap().contains("\"merge_into\""));
+    }
+
+    #[test]
+    fn bare_stub_is_due_by_itself_and_the_body_says_so() {
+        let mut g = Graph::seed();
+        harvest::apply_ops(
+            &mut g,
+            vec![Op::State {
+                id: "x-report-run".into(),
+                distillants: vec!["work/x-engagement-report".into()],
+                text: "Ran the X report for Mason.".into(),
+                relation: crate::harvest::Relation::Novel,
+                target: "".into(),
+                importance: 0.5,
+                aliases: vec![],
+                occurred_at: None,
+            }],
+            1_000,
+        );
+        assert_eq!(pressure(&g, "work/x-engagement-report"), BARE_PRESSURE);
+        assert_eq!(due(&g).as_deref(), Some("work/x-engagement-report"), "a stub with no line is due on its own");
+        let body = redistill_body(&g, "work/x-engagement-report").unwrap();
+        assert!(body.contains("Current line: (none — created bare"), "{body}");
+        assert!(stats(&g).contains("bare distillants (no line yet"), "{}", stats(&g));
+
+        let raw = r#"{"line": "Runs the X engagement report for friends.", "routing": ["x report"], "merge_into": ""}"#;
+        apply_redistilled(&mut g, "work/x-engagement-report", raw, 2_000).unwrap();
+        assert_eq!(pressure(&g, "work/x-engagement-report"), 0, "a written line ends bare pressure");
+        assert_eq!(due(&g), None);
+    }
+
+    #[test]
+    fn redistill_lists_namesakes_and_merge_into_absorbs_the_stub() {
+        let mut g = Graph::seed();
+        harvest::apply_ops(
+            &mut g,
+            vec![
+                Op::Distillant {
+                    id: "life/hacks".into(),
+                    tree: Tree::Registry,
+                    label: "Hacks".into(),
+                    line: "The hack drawer.".into(),
+                    routing: vec![],
+                    parents: vec!["life".into()],
+                },
+                Op::Distillant {
+                    id: "life/hacks/x-engagement-report".into(),
+                    tree: Tree::Registry,
+                    label: "X Engagement Report".into(),
+                    line: "A hack that scrapes X and emails a dashboard.".into(),
+                    routing: vec!["engagement report".into()],
+                    parents: vec!["life/hacks".into()],
+                },
+                Op::State {
+                    id: "x-report-run".into(),
+                    distillants: vec!["work/x-engagement-report".into()],
+                    text: "Ran the X report for Mason.".into(),
+                    relation: crate::harvest::Relation::Novel,
+                    target: "".into(),
+                    importance: 0.5,
+                    aliases: vec![],
+                    occurred_at: None,
+                },
+            ],
+            1_000,
+        );
+        let body = redistill_body(&g, "work/x-engagement-report").unwrap();
+        assert!(
+            body.contains("Same-named distillants elsewhere (merge_into one of these if this is the same thing):\n- life/hacks/x-engagement-report — A hack that scrapes X"),
+            "{body}"
+        );
+        assert!(!redistill_body(&g, "life/hacks").unwrap().contains("Same-named"), "no namesake, no section");
+
+        let raw = r#"{"line": "ignored", "routing": ["ignored"], "merge_into": "life/hacks/x-engagement-report"}"#;
+        let traces = apply_redistilled(&mut g, "work/x-engagement-report", raw, 2_000).unwrap();
+        assert!(!g.distillants.contains_key("work/x-engagement-report"), "{traces:?}");
+        assert_eq!(g.leaves["x-report-run"].parents, vec!["life/hacks/x-engagement-report"]);
+        let kept = &g.distillants["life/hacks/x-engagement-report"];
+        assert_eq!(kept.line, "A hack that scrapes X and emails a dashboard.", "the absorbed stub's ignored line never lands");
+        assert!(!kept.routing.contains(&"ignored".to_string()));
+        assert!(traces.iter().any(|t| t.contains("⊕ merged distillant work/x-engagement-report into life/hacks/x-engagement-report")), "{traces:?}");
+
+        // An invalid target (here: the other tree) falls back to a plain in-place redistill.
+        let raw = r#"{"line": "Hacks, distilled.", "routing": ["hacks"], "merge_into": "temperament"}"#;
+        let traces = apply_redistilled(&mut g, "life/hacks", raw, 3_000).unwrap();
+        assert!(g.distillants.contains_key("life/hacks"));
+        assert_eq!(g.distillants["life/hacks"].line, "Hacks, distilled.");
+        assert!(traces.iter().any(|t| t.contains("merge_into rejected")), "{traces:?}");
+        assert!(traces.iter().any(|t| t.contains("invalid")), "the merge names why: {traces:?}");
+    }
+
     fn leaf_under(g: &mut Graph, id: &str, parent: &str, at: u64) {
         let l = Leaf::new(id.into(), Species::State, format!("fact {id}"), vec![parent.into()], at);
         g.leaves.insert(l.id.clone(), l);
@@ -828,6 +1041,7 @@ mod tests {
                 misc_count: 0,
                 consolidated_at: at,
                 line_changed_at: 0,
+                forgotten_at: 0,
             },
         );
     }
@@ -857,6 +1071,21 @@ mod tests {
 
         g.distillants.get_mut("money").unwrap().consolidated_at = 3_000;
         assert_eq!(drift(&g, "money"), 0, "a pass clears drift by construction");
+    }
+
+    #[test]
+    fn a_forget_under_a_distillant_is_drift_until_the_next_pass() {
+        let mut g = Graph::seed();
+        leaf_under(&mut g, "katsu", "life", 1_000);
+        leaf_under(&mut g, "walks", "life", 1_000);
+        g.distillants.get_mut("life").unwrap().consolidated_at = 1_500;
+        assert_eq!(drift(&g, "life"), 0);
+        g.forget("katsu", 2_000);
+        assert_eq!(drift(&g, "life"), DRIFT_AGAINST, "the line was written over a leaf that is gone");
+        assert_eq!(due(&g), None, "one forget is under the trigger on its own");
+        let raw = r#"{"line": "Walks, mostly.", "routing": [], "merge_into": ""}"#;
+        apply_redistilled(&mut g, "life", raw, 3_000).unwrap();
+        assert_eq!(drift(&g, "life"), 0, "a pass clears it by construction");
     }
 
     #[test]

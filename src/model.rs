@@ -190,6 +190,34 @@ pub struct Distillant {
     /// longer exists.
     #[serde(default, alias = "distillant_changed_at")]
     pub line_changed_at: u64,
+    /// Write time of the last forget that removed a leaf or child under
+    /// this distillant (0 = never). A line written over something that has
+    /// since been forgotten is suspect regardless of what remains — drift
+    /// reads this like a leaf that moved against its text.
+    #[serde(default)]
+    pub forgotten_at: u64,
+}
+
+impl Distillant {
+    /// A distillant is bare when no pass has written its judgment: the
+    /// line is empty, or only repeats the label (the shape a stub takes
+    /// when a leaf names a distillant before anything distills it). Bare
+    /// is a state, not a line: every render says so instead of printing a
+    /// label as if it were a judgment.
+    pub fn is_bare(&self) -> bool {
+        let line = self.line.trim();
+        line.is_empty() || line.eq_ignore_ascii_case(self.label.trim())
+    }
+
+    /// The one-line text every render shows for this distillant: its line,
+    /// or its label marked as still unwritten.
+    pub fn headline(&self) -> String {
+        if self.is_bare() {
+            format!("{} (no line yet)", self.label)
+        } else {
+            self.line.clone()
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -259,6 +287,7 @@ impl Graph {
                     misc_count: 0,
                     consolidated_at: 0,
                     line_changed_at: 0,
+                    forgotten_at: 0,
                 },
             );
         }
@@ -386,6 +415,173 @@ impl Graph {
         }
         false
     }
+
+    /// A parent set names the finest homes only: deduplicated, no empties,
+    /// and no parent that is an ancestor of another parent in the set — an
+    /// ancestor beside its own descendant says nothing the descendant does
+    /// not, and renders the node twice.
+    pub fn antichain(&self, parents: Vec<Id>) -> Vec<Id> {
+        let mut distinct: Vec<Id> = Vec::new();
+        for p in parents {
+            if !p.is_empty() && !distinct.contains(&p) {
+                distinct.push(p);
+            }
+        }
+        let is_ancestor_of_another =
+            |p: &Id| distinct.iter().any(|q| q != p && self.is_ancestor(p, q));
+        distinct.iter().filter(|p| !is_ancestor_of_another(p)).cloned().collect()
+    }
+
+    /// Forget by id — a leaf, or a distillant with everything under it.
+    /// Forgetting is the user's authority over what is held about them, so
+    /// the content leaves every store: the leaves go; the stream episodes
+    /// that were evidence for nothing else go with them (an episode
+    /// restating the content would keep it recallable); a forgotten
+    /// distillant's children re-home to its parents and episode tags naming
+    /// it are dropped. Every surviving distillant that held something
+    /// removed is stamped `forgotten_at = now`, so its line reads as
+    /// drifted until a pass rewrites it. None when nothing has that id.
+    pub fn forget(&mut self, id: &str, now: u64) -> Option<Forgotten> {
+        let distillant_ids = self.forgotten_distillant_ids(id);
+        let forgets_a_distillant = !distillant_ids.is_empty();
+        let leaf_ids: Vec<Id> = if forgets_a_distillant {
+            self.leaves
+                .values()
+                .filter(|l| l.parents.iter().all(|p| distillant_ids.contains(p)))
+                .map(|l| l.id.clone())
+                .collect()
+        } else if self.leaves.contains_key(id) {
+            vec![id.to_string()]
+        } else {
+            return None;
+        };
+
+        let mut removed_leaves: Vec<Leaf> = Vec::new();
+        for lid in &leaf_ids {
+            if let Some(l) = self.leaves.remove(lid) {
+                removed_leaves.push(l);
+            }
+        }
+        let mut held_something_removed: Vec<Id> =
+            removed_leaves.iter().flat_map(|l| l.parents.iter().cloned()).collect();
+        // A leaf that hung under a forgotten distillant AND somewhere else
+        // keeps living at its other homes.
+        for l in self.leaves.values_mut() {
+            l.parents.retain(|p| !distillant_ids.contains(p));
+        }
+
+        let mut new_homes: Vec<Id> = Vec::new();
+        for did in &distillant_ids {
+            if let Some(d) = self.distillants.remove(did) {
+                new_homes.extend(d.parents);
+            }
+        }
+        held_something_removed.extend(new_homes.iter().cloned());
+        for pid in held_something_removed {
+            if let Some(p) = self.distillants.get_mut(&pid) {
+                p.forgotten_at = now;
+            }
+        }
+        let child_ids: Vec<Id> = self
+            .distillants
+            .values()
+            .filter(|d| d.parents.iter().any(|p| distillant_ids.contains(p)))
+            .map(|d| d.id.clone())
+            .collect();
+        for cid in child_ids {
+            let Some(child) = self.distillants.get(&cid) else { continue };
+            let mut parents: Vec<Id> =
+                child.parents.iter().filter(|p| !distillant_ids.contains(p)).cloned().collect();
+            parents.extend(new_homes.iter().cloned());
+            let parents = self.antichain(parents);
+            if let Some(child) = self.distillants.get_mut(&cid) {
+                child.parents = parents;
+            }
+        }
+
+        let still_evidence: Vec<&Id> = self.leaves.values().flat_map(|l| l.evidence.iter()).collect();
+        let sole_evidence: Vec<Id> = removed_leaves
+            .iter()
+            .flat_map(|l| l.evidence.iter())
+            .filter(|e| !still_evidence.contains(e))
+            .cloned()
+            .collect();
+        let tagged_only_here = |e: &Episode| {
+            forgets_a_distillant && !e.tags.is_empty() && e.tags.iter().all(|t| distillant_ids.contains(t))
+        };
+        let mut episodes: Vec<Id> = Vec::new();
+        self.episodes.retain(|e| {
+            let goes = sole_evidence.contains(&e.id) || tagged_only_here(e);
+            if goes {
+                episodes.push(e.id.clone());
+            }
+            !goes
+        });
+        for e in &mut self.episodes {
+            e.tags.retain(|t| !distillant_ids.contains(t));
+        }
+
+        Some(Forgotten {
+            leaves: removed_leaves.into_iter().map(|l| l.id).collect(),
+            distillants: distillant_ids,
+            episodes,
+        })
+    }
+
+    /// Restore the parent-set invariant over the whole graph: every leaf's
+    /// and distillant's parents become an antichain. Ops keep the invariant
+    /// as they go; this is for graphs written before it held. Returns the
+    /// ids whose parent set changed.
+    pub fn normalize_parents(&mut self) -> Vec<Id> {
+        let mut changed: Vec<Id> = Vec::new();
+        let distillant_ids: Vec<Id> = self.distillants.keys().cloned().collect();
+        for id in distillant_ids {
+            let parents = self.distillants[&id].parents.clone();
+            let homes = self.antichain(parents.clone());
+            if homes != parents {
+                self.distillants.get_mut(&id).expect("listed above").parents = homes;
+                changed.push(id);
+            }
+        }
+        let leaf_ids: Vec<Id> = self.leaves.keys().cloned().collect();
+        for id in leaf_ids {
+            let parents = self.leaves[&id].parents.clone();
+            let homes = self.antichain(parents.clone());
+            if homes != parents {
+                self.leaves.get_mut(&id).expect("listed above").parents = homes;
+                changed.push(id);
+            }
+        }
+        changed
+    }
+
+    /// The distillant `id` and every distillant reachable below it (a
+    /// forgotten distillant takes its subtree). Empty when `id` is no
+    /// distillant.
+    fn forgotten_distillant_ids(&self, id: &str) -> Vec<Id> {
+        if !self.distillants.contains_key(id) {
+            return Vec::new();
+        }
+        let mut out: Vec<Id> = vec![id.to_string()];
+        let mut i = 0;
+        while i < out.len() {
+            for c in self.child_distillants(&out[i]) {
+                if !out.contains(&c.id) {
+                    out.push(c.id.clone());
+                }
+            }
+            i += 1;
+        }
+        out
+    }
+}
+
+/// What one `Graph::forget` removed, by id — the trace names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Forgotten {
+    pub leaves: Vec<Id>,
+    pub distillants: Vec<Id>,
+    pub episodes: Vec<Id>,
 }
 
 pub fn slugify(s: &str) -> String {
@@ -500,6 +696,7 @@ mod tests {
                     misc_count: 0,
                     consolidated_at: 0,
                     line_changed_at: 0,
+                    forgotten_at: 0,
                 },
             );
         }
@@ -507,6 +704,135 @@ mod tests {
         assert!(g.is_ancestor("life/island", "life/island/animals"));
         assert!(!g.is_ancestor("life/island/animals", "life"));
         assert!(!g.is_ancestor("money", "life/island"));
+    }
+
+    fn bare_distillant(g: &mut Graph, id: &str, parents: &[&str]) {
+        g.distillants.insert(
+            id.into(),
+            Distillant {
+                id: id.into(),
+                tree: Tree::Registry,
+                label: id.rsplit('/').next().unwrap_or(id).replace('-', " "),
+                line: String::new(),
+                routing: vec![],
+                parents: parents.iter().map(|p| p.to_string()).collect(),
+                misc_count: 0,
+                consolidated_at: 0,
+                line_changed_at: 0,
+                forgotten_at: 0,
+            },
+        );
+    }
+
+    fn leaf_with_evidence(g: &mut Graph, id: &str, parents: &[&str], evidence: &[&str]) {
+        let mut l = Leaf::new(
+            id.into(),
+            Species::State,
+            format!("fact {id}"),
+            parents.iter().map(|p| p.to_string()).collect(),
+            1,
+        );
+        l.evidence = evidence.iter().map(|e| e.to_string()).collect();
+        g.leaves.insert(l.id.clone(), l);
+    }
+
+    #[test]
+    fn antichain_drops_ancestors_duplicates_and_empties() {
+        let mut g = Graph::seed();
+        bare_distillant(&mut g, "work/video", &["work"]);
+        bare_distillant(&mut g, "work/video/prompt", &["work/video"]);
+        let homes = g.antichain(vec![
+            "work".into(),
+            "work/video".into(),
+            "".into(),
+            "work/video".into(),
+            "people".into(),
+        ]);
+        assert_eq!(homes, vec!["work/video", "people"], "the ancestor `work` is implied by `work/video`");
+        assert_eq!(g.antichain(vec!["work/video/prompt".into(), "work".into()]), vec!["work/video/prompt"]);
+        assert_eq!(g.antichain(vec!["money".into()]), vec!["money"], "a single parent stands");
+    }
+
+    #[test]
+    fn forget_leaf_takes_only_its_sole_evidence_episodes() {
+        let mut g = Graph::seed();
+        let shared = g.push_episode("ate lunch and paid rent".into(), vec!["life".into()], 1, None);
+        let sole = g.push_episode("ate katsu curry".into(), vec!["life".into()], 2, None);
+        let unrelated = g.push_episode("rent paid".into(), vec!["money".into()], 3, None);
+        leaf_with_evidence(&mut g, "katsu", &["life"], &[&shared, &sole]);
+        leaf_with_evidence(&mut g, "rent", &["money"], &[&shared, &unrelated]);
+
+        let gone = g.forget("katsu", 9).expect("leaf exists");
+        assert_eq!(g.distillants["life"].forgotten_at, 9, "the parent that held the leaf is stamped");
+        assert_eq!(g.distillants["money"].forgotten_at, 0);
+        assert_eq!(gone.leaves, vec!["katsu"]);
+        assert!(gone.distillants.is_empty());
+        assert_eq!(gone.episodes, vec![sole.clone()], "only the episode nothing else cites leaves the stream");
+        assert!(!g.leaves.contains_key("katsu"));
+        assert!(g.episodes.iter().any(|e| e.id == shared), "an episode still cited elsewhere stays");
+        assert!(g.episodes.iter().all(|e| e.id != sole));
+        assert_eq!(g.leaves["rent"].evidence, vec![shared, unrelated]);
+    }
+
+    #[test]
+    fn forget_distillant_takes_subtree_rehomes_children_and_drops_tags() {
+        let mut g = Graph::seed();
+        bare_distillant(&mut g, "work/hack", &["work"]);
+        bare_distillant(&mut g, "work/hack/inner", &["work/hack"]);
+        bare_distillant(&mut g, "work/hack/kept-elsewhere", &["work/hack", "people"]);
+        let only_here = g.push_episode("hack built".into(), vec!["work/hack".into()], 1, None);
+        let also_money = g.push_episode("hack sold".into(), vec!["work/hack".into(), "money".into()], 2, None);
+        leaf_with_evidence(&mut g, "inner-fact", &["work/hack/inner"], &[]);
+        leaf_with_evidence(&mut g, "dual-home", &["work/hack", "money"], &[]);
+
+        let gone = g.forget("work/hack", 9).expect("distillant exists");
+        assert_eq!(g.distillants["work"].forgotten_at, 9, "the surviving parent of a forgotten distillant is stamped");
+        assert_eq!(gone.distillants, vec!["work/hack", "work/hack/inner", "work/hack/kept-elsewhere"]);
+        assert_eq!(gone.leaves, vec!["inner-fact"], "a leaf with another home survives");
+        assert_eq!(gone.episodes, vec![only_here], "an episode tagged only inside the forgotten subtree goes");
+        assert_eq!(g.leaves["dual-home"].parents, vec!["money"]);
+        let sold = g.episodes.iter().find(|e| e.id == also_money).expect("shared-tag episode stays");
+        assert_eq!(sold.tags, vec!["money"], "the forgotten tag is dropped");
+        assert!(!g.distillants.contains_key("work/hack/kept-elsewhere"), "the subtree goes even where a child had a second parent");
+    }
+
+    #[test]
+    fn forget_distillant_rehomes_grandchildren_to_the_parents() {
+        let mut g = Graph::seed();
+        bare_distillant(&mut g, "work/a", &["work"]);
+        bare_distillant(&mut g, "work/a/b", &["work/a"]);
+        // Forgetting only the middle node: its child climbs to `work`.
+        let ids = g.forgotten_distillant_ids("work/a");
+        assert_eq!(ids, vec!["work/a", "work/a/b"], "a forget takes the whole subtree, never just the middle");
+        assert!(g.forget("nope", 9).is_none());
+    }
+
+    #[test]
+    fn headline_marks_bare_distillants() {
+        let mut g = Graph::seed();
+        bare_distillant(&mut g, "work/x-report", &["work"]);
+        assert!(g.distillants["work/x-report"].is_bare());
+        assert_eq!(g.distillants["work/x-report"].headline(), "x report (no line yet)");
+        assert_eq!(g.distillants["money"].headline(), g.distillants["money"].line);
+        // The legacy stub shape: a line that only repeats the label is no line.
+        g.distillants.get_mut("work/x-report").unwrap().line = "X Report".into();
+        assert!(g.distillants["work/x-report"].is_bare());
+        g.distillants.get_mut("work/x-report").unwrap().line = "Runs the X report for friends.".into();
+        assert!(!g.distillants["work/x-report"].is_bare());
+    }
+
+    #[test]
+    fn normalize_parents_repairs_a_graph_written_before_the_invariant() {
+        let mut g = Graph::seed();
+        bare_distillant(&mut g, "work/video", &["work"]);
+        bare_distillant(&mut g, "work/video/prompt", &["work", "work/video"]);
+        leaf_with_evidence(&mut g, "take", &["work/video/prompt", "work"], &[]);
+        leaf_with_evidence(&mut g, "fine", &["money"], &[]);
+        let changed = g.normalize_parents();
+        assert_eq!(changed, vec!["work/video/prompt", "take"]);
+        assert_eq!(g.distillants["work/video/prompt"].parents, vec!["work/video"]);
+        assert_eq!(g.leaves["take"].parents, vec!["work/video/prompt"]);
+        assert!(g.normalize_parents().is_empty(), "idempotent");
     }
 
     #[test]
