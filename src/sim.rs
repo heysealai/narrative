@@ -152,17 +152,18 @@ impl Sim {
                 Err(e) => trace(&format!("⚠ digest failed: {e}")),
             },
             "/stats" => print!("{}", consolidate::stats(&self.graph)),
-            "/forget" => {
-                if self.graph.leaves.remove(arg).is_some() {
-                    trace(&format!("✗ forgot leaf [{arg}]"));
+            "/forget" => match self.graph.forget(arg, model::now()) {
+                Some(gone) => {
+                    trace(&format!(
+                        "✗ forgot {arg} — {} leaves, {} distillants, {} episodes left the graph",
+                        gone.leaves.len(),
+                        gone.distillants.len(),
+                        gone.episodes.len()
+                    ));
                     store::save(&self.data_file, &self.graph)?;
-                } else if self.graph.distillants.remove(arg).is_some() {
-                    trace(&format!("✗ forgot distillant {arg} (leaves under it become orphans)"));
-                    store::save(&self.data_file, &self.graph)?;
-                } else {
-                    println!("nothing with id \"{arg}\"");
                 }
-            }
+                None => println!("nothing with id \"{arg}\""),
+            },
             "/reset-chat" => {
                 self.history.clear();
                 trace("chat history cleared (memory untouched)");
@@ -189,7 +190,7 @@ chat:        type anything — full loop: project → recall → reply → harve
 /distill <id> consolidation step: re-distill a distillant via the model
 /digest      stream step: distill the due digest pass via the model
 /stats       residual report: where consolidation pressure is building
-/forget <id> drop a leaf or distillant
+/forget <id> forget a leaf or distillant (with its sole evidence)
 /reset-chat  clear chat history (memory persists — the whole point)
 /save        force save
 /quit        exit";

@@ -77,6 +77,11 @@ pub enum Op {
     MergeLeaf { from: String, into: String },
     /// Merge two distillants that turned out to be the same thing.
     MergeDistillant { from: String, into: String },
+    /// The user asked to forget something: the leaf or distillant that holds
+    /// it leaves every store (`Graph::forget`). Authoritative — applied
+    /// after everything else in the batch, so nothing the same harvest
+    /// wrote about the content survives it.
+    Forget { target: String },
 }
 
 /// Wire format for the harvester's structured output. Named homogeneous
@@ -100,6 +105,7 @@ struct HarvestOut {
     reparents: Vec<ReparentOp>,
     merge_leaves: Vec<MergeOp>,
     merge_distillants: Vec<MergeOp>,
+    forgets: Vec<ForgetOp>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -178,6 +184,11 @@ struct MergeOp {
     into: String,
 }
 
+#[derive(Deserialize, Debug)]
+struct ForgetOp {
+    target: String,
+}
+
 impl HarvestOut {
     fn into_ops(self) -> Vec<Op> {
         let mut ops = Vec::new();
@@ -239,6 +250,9 @@ impl HarvestOut {
         for m in self.merge_distillants {
             ops.push(Op::MergeDistillant { from: m.from, into: m.into });
         }
+        for f in self.forgets {
+            ops.push(Op::Forget { target: f.target });
+        }
         ops
     }
 }
@@ -293,7 +307,7 @@ pub fn ops_schema() -> Value {
                         "relation": relation,
                         "target": {"type": "string", "description": "existing leaf id this relates to; empty string when novel"},
                         "importance": {"type": "number", "description": "0..1; 0.9+ for money rules and critical facts"},
-                        "aliases": {"type": "array", "items": {"type": "string"}, "description": "ways the user referred to the thing, added to the first distillant's routing"},
+                        "aliases": {"type": "array", "items": {"type": "string"}, "description": "ways the user refers to the THING this fact is about (names, nicknames, handles, addresses), added to the first distillant's routing — never words lifted from the fact itself"},
                         "occurred_at": {"type": ["integer", "null"], "description": "unix seconds when the fact became true / the change happened, when stated; null = now"}
                     },
                     "required": ["id", "distillants", "text", "relation", "target", "importance", "aliases", "occurred_at"],
@@ -306,7 +320,7 @@ pub fn ops_schema() -> Value {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "id": {"type": "string"},
+                        "id": {"type": "string", "description": "the EXISTING axis id from the pinned profile when the observation is about a tendency already tracked (that is a nudge); a new kebab-case id only for a genuinely new axis"},
                         "distillants": {"type": "array", "items": {"type": "string"}},
                         "text": {"type": "string", "description": "the axis statement, e.g. \"keeps spending tightly controlled\""},
                         "dir": {"type": "integer", "enum": [-1, 1], "description": "+1 pushes toward the statement, -1 against it"},
@@ -394,6 +408,18 @@ pub fn ops_schema() -> Value {
                     "additionalProperties": false
                 }
             },
+            "forgets": {
+                "description": "The user explicitly asked to forget, delete, or stop remembering something: the ids of the leaves or distillants that hold it (they appear in the comparanda or the directory). Authoritative and applied last.",
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "target": {"type": "string", "description": "existing leaf or distillant id"}
+                    },
+                    "required": ["target"],
+                    "additionalProperties": false
+                }
+            },
             "merge_distillants": {
                 "description": "Merge two distillants that turned out to be the same thing: leaves, children, and routing move to 'into'; 'from' is deleted.",
                 "type": "array",
@@ -408,7 +434,7 @@ pub fn ops_schema() -> Value {
                 }
             }
         },
-        "required": ["distillants", "episodes", "states", "dispositions", "reinforces", "aliases", "distills", "moves", "reparents", "merge_leaves", "merge_distillants"],
+        "required": ["distillants", "episodes", "states", "dispositions", "reinforces", "aliases", "distills", "moves", "reparents", "merge_leaves", "merge_distillants", "forgets"],
         "additionalProperties": false
     })
 }
@@ -423,16 +449,17 @@ Rules:
 1. Distill only what is durable. Chitchat, pleasantries, and one-off questions leave no trace. All sections empty is a perfectly good harvest.
 2. One fact per leaf. Small, boring, atomic sentences. Never bundle.
 3. Distillant creation is your judgment call: a durable participant in the user's life (a person, an obligation, a project) deserves a distillant (e.g. people/lisa, money/rent); an incidental mention stays a tag on an episode. Distillant ids are path-like, under the existing crown roots. Declare new distillants in the distillants section; they are applied before leaves. The user themself is never a distillant: the whole graph already models them — their history, doings, and possessions live under the topical crowns, their tendencies in the profile. people/* is for the OTHER people in their life.
-4. Aliases are how future recall works: record every way the user refers to a thing ("my sister", "lisa.eth", "the landlord") as routing vocabulary — on the state's aliases field or in the aliases section. Single-user memory: possessives like "my sister" are stable aliases. Wallet addresses, handles and emails are exact anchors — always record them. Matching is exact-token, no stemming: include the inflected forms a future message would actually contain ("payment" AND "payments"). Evaluative vocabulary (trust, regret, fear, pride, conflict) is derived from lines automatically — spend aliases and routing on referring expressions, never on facet words.
+4. Aliases are how future recall works: record the ways the user refers to a THING ("my sister", "lisa.eth", "the landlord") as routing vocabulary — on the state's aliases field or in the aliases section. Routing is a referring-expression index, not a word list: never lift words out of the fact itself, episode detail (numbers, one-off phrasings), or generic phrases a message about anything could contain — every stray term routes unrelated messages here. Single-user memory: possessives like "my sister" are stable aliases. Wallet addresses, handles and emails are exact anchors — always record them. Matching is exact-token, no stemming: include the inflected forms a future message would actually contain ("payment" AND "payments"). Evaluative vocabulary (trust, regret, fear, pride, conflict) is derived from lines automatically — spend aliases and routing on referring expressions, never on facet words.
 5. Cross-match against the comparanda you are given. Classify each state: novel (nothing like it exists), duplicate (already stored, restated), supports (new evidence for an existing leaf — set target), contradicts (casts doubt, no clear replacement — set target), supersedes (clear new value replacing an old one — set target). Never store the same knowledge twice as novel. When the turn merely adds evidence for an existing leaf and there is nothing to restate, emit a reinforces entry instead of a supports state.
 6. You classify; the runtime does the arithmetic. Never hedge text with probabilities.
 7. importance: 0.9+ money rules, safety-critical facts, explicit "remember this"; ~0.5 ordinary facts; ~0.2 minor color. High-importance exceptions ("got scammed by X once") deserve their own leaf — never average them away.
-8. Dispositions: the leaf text states the +1 pole of the axis. dir=+1 pushes toward the statement, dir=-1 against it. Keep profile axes few and broad; prefer nudging an existing axis over inventing a near-duplicate.
+8. Dispositions: the leaf text states the +1 pole of the axis. dir=+1 pushes toward the statement, dir=-1 against it. The whole profile is shown to you every time (pinned): an observation about a tendency already tracked is a nudge on that existing id — a new leaf only for a genuinely new axis. Keep profile axes few and broad.
 9. Episodes: log events worth remembering as events (payments, decisions, incidents, plans made). Tag with involved distillant ids. The leaf ops you emit alongside will be wired to them as evidence automatically.
 10. Use distill to refresh a distillant's one-line summary when what you learned makes the old line stale.
 11. Time: everything is stamped with write time automatically. When the turn says WHEN something actually happened or changed ("last month", "back in 2019", dated backlog text), set occurred_at to unix seconds; otherwise null. Recall renders ages from it — "changed 2mo ago" should mean two months of the user's life, not two months since you wrote it.
 12. Structure follows understanding: when you create a finer distillant that better fits leaves you can see in the comparanda, move those leaves under it with moves entries. Merge ops (merge_leaves, merge_distillants) repair duplicates discovered after the fact — two leaves or distillants that turned out to be the same thing. Use structural ops sparingly in harvest; consolidation does the heavy restructuring.
-13. Lines are retrieval scent: a later question can only descend to a leaf if some line on its path advertises the relevant vocabulary. When a leaf carries evaluative weight — trust, regret, fear, pride, conflict — say so in the line alongside the topic ("sworn companion, sold to the captain — parting is a standing regret"), not just the noun-shape ("proves loyal"). A regret no line mentions is a regret recall cannot find; one the line carries routes automatically — the line is the only place it needs to be. Lines are plain prose about the person — never machinery words ("facet", "routing", "distillant", "leaf"), and never this rule's example wording restated as fact: examples illustrate shape, not content."#;
+13. Forgetting is the user's call and it is final: when the user asks to forget, delete, or stop remembering something, emit a forgets entry for every leaf or distillant that holds it (find them in the comparanda and the directory) and leave no trace of the content anywhere else in this harvest — no episode recording the request, no state restating it. When nothing stored matches, the harvest simply carries nothing about it.
+14. Lines are retrieval scent: a later question can only descend to a leaf if some line on its path advertises the relevant vocabulary. When a leaf carries evaluative weight — trust, regret, fear, pride, conflict — say so in the line alongside the topic ("sworn companion, sold to the captain — parting is a standing regret"), not just the noun-shape ("proves loyal"). A regret no line mentions is a regret recall cannot find; one the line carries routes automatically — the line is the only place it needs to be. Lines are plain prose about the person — never machinery words ("facet", "routing", "distillant", "leaf"), and never this rule's example wording restated as fact: examples illustrate shape, not content."#;
 
 fn render_directory(graph: &Graph) -> String {
     let mut out = String::new();
@@ -447,7 +474,7 @@ fn render_directory(graph: &Graph) -> String {
             m.id,
             tree,
             m.label,
-            m.line,
+            m.headline(),
             m.routing.join(", ")
         );
     }
@@ -496,13 +523,41 @@ fn render_comparanda(graph: &Graph, turn_text: &str, now: u64) -> String {
     out
 }
 
+/// The profile is pinned for the harvester exactly as it is pinned for
+/// recall: every disposition, every time, regardless of what the turn
+/// routes to. Cross-matching against a sample would let the harvester
+/// mint a near-duplicate of an axis it was never shown — belief strength
+/// can only accumulate on an axis the harvester can see.
+fn render_pinned_profile(graph: &Graph) -> String {
+    let mut out = String::new();
+    let mut roots = graph.roots(Tree::Profile);
+    roots.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut stack: Vec<String> = roots.iter().rev().map(|r| r.id.clone()).collect();
+    while let Some(id) = stack.pop() {
+        let mut leaves = graph.leaves_under(&id);
+        leaves.sort_by(|a, b| a.id.cmp(&b.id));
+        for l in leaves {
+            let _ = writeln!(out, "- [{}] (under {}) {} (axis {:+.2}, {} observations)", l.id, id, l.text, l.axis, l.nudges.len());
+        }
+        let mut children = graph.child_distillants(&id);
+        children.sort_by(|a, b| b.id.cmp(&a.id));
+        stack.extend(children.into_iter().map(|c| c.id.clone()));
+    }
+    if out.is_empty() {
+        out.push_str("(no axes yet)\n");
+    }
+    out
+}
+
 pub fn build_user_message(graph: &Graph, user_text: &str, assistant_text: &str, now: u64) -> String {
     let turn_text = format!("{user_text} {assistant_text}");
     format!(
         "# Memory directory (all distillants)\n{}\n\
+         # Profile axes (pinned — every disposition already tracked; nudge one of these by id, never mint a near-duplicate)\n{}\n\
          # Existing leaves related to this turn (comparanda — cross-match against these)\n{}\n\
          # Turn to harvest\nUser: {}\nAssistant: {}",
         render_directory(graph),
+        render_pinned_profile(graph),
         render_comparanda(graph, &turn_text, now),
         user_text,
         assistant_text
@@ -576,18 +631,23 @@ fn ensure_distillant(graph: &mut Graph, id: &str, tree: Tree, traces: &mut Vec<S
         Some((prefix, _)) if graph.distillants.contains_key(prefix) => vec![prefix.to_string()],
         _ => Vec::new(),
     };
+    // A bare stub has no line: nothing distilled it. Leaving the line empty
+    // is what makes it visibly bare — every render says "(no line yet)" and
+    // consolidation treats it as due (`consolidate::pressure`), where the
+    // pass writes its first line or merges it into a same-named distillant.
     graph.distillants.insert(
         id.to_string(),
         Distillant {
             id: id.to_string(),
             tree,
-            label: label.clone(),
-            line: label,
+            label,
+            line: String::new(),
             routing: Vec::new(),
             parents,
             misc_count: 0,
             consolidated_at: 0,
             line_changed_at: 0,
+            forgotten_at: 0,
         },
     );
     traces.push(format!("⚠ auto-created bare distillant {id} (harvester skipped the distillant op)"));
@@ -676,21 +736,30 @@ pub(crate) fn sync_facet_routing(graph: &mut Graph, distillant_id: &str, traces:
 pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
     let mut traces = Vec::new();
 
+    // Every apply starts on the parent-set invariant, so a graph written
+    // before it held is repaired the first time it is touched.
+    let repaired = graph.normalize_parents();
+    if !repaired.is_empty() {
+        traces.push(format!("⇢ parent sets antichained: {}", repaired.join(", ")));
+    }
+
     // Distillants first so leaves have somewhere to hang.
     for op in &ops {
         if let Op::Distillant { id, tree, label, line, routing, parents } = op {
             let existed = graph.distillants.contains_key(id);
+            let parents = graph.antichain(parents.clone());
             let entry = graph.distillants.entry(id.clone()).or_insert(Distillant {
                 id: id.clone(),
                 tree: *tree,
                 label: label.clone(),
                 line: line.clone(),
                 routing: Vec::new(),
-                parents: parents.clone(),
+                parents,
                 misc_count: 0,
                 consolidated_at: 0,
                 // A brand-new line is changed material from any parent's view.
                 line_changed_at: now,
+                forgotten_at: 0,
             });
             let rewritten = existed && !line.is_empty();
             if existed {
@@ -741,8 +810,8 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
                             "⚠ {relation:?} on missing leaf [{target_id}]; storing as novel"
                         ));
                     }
-                    let mut leaf =
-                        Leaf::new(id.clone(), Species::State, text.clone(), distillants.clone(), now);
+                    let homes = graph.antichain(distillants.clone());
+                    let mut leaf = Leaf::new(id.clone(), Species::State, text.clone(), homes, now);
                     leaf.salience.importance = importance;
                     leaf.evidence = evidence.clone();
                     leaf.occurred_at = occurred_at;
@@ -822,7 +891,8 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
                     }
                     traces.push(line);
                 } else {
-                    let mut leaf = Leaf::new(id.clone(), Species::Disposition, text.clone(), distillants, now);
+                    let homes = graph.antichain(distillants);
+                    let mut leaf = Leaf::new(id.clone(), Species::Disposition, text.clone(), homes, now);
                     leaf.salience.importance = importance;
                     leaf.axis = belief::nudge_axis(0.0, dir);
                     leaf.nudges.push(crate::model::Nudge { dir, note, at: now });
@@ -873,9 +943,24 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
             }
             Op::MergeLeaf { from, into } => apply_merge_leaf(graph, from, into, now, &mut traces),
             Op::MergeDistillant { from, into } => apply_merge_distillant(graph, from, into, &mut traces),
+            Op::Forget { target } => apply_forget(graph, target, now, &mut traces),
         }
     }
     traces
+}
+
+fn apply_forget(graph: &mut Graph, target: String, now: u64, traces: &mut Vec<String>) {
+    let Some(gone) = graph.forget(&target, now) else {
+        traces.push(format!("⚠ forget of unknown id [{target}]; skipped"));
+        return;
+    };
+    traces.push(format!(
+        "✗ forgot [{}] — {} leaves, {} distillants, {} episodes left the graph",
+        target,
+        gone.leaves.len(),
+        gone.distillants.len(),
+        gone.episodes.len()
+    ));
 }
 
 fn apply_move(graph: &mut Graph, leaf_id: String, parents: Vec<String>, now: u64, traces: &mut Vec<String>) {
@@ -883,11 +968,7 @@ fn apply_move(graph: &mut Graph, leaf_id: String, parents: Vec<String>, now: u64
         traces.push(format!("⚠ move of unknown leaf [{leaf_id}]; skipped"));
         return;
     };
-    let mut parents: Vec<String> = {
-        let mut seen = Vec::new();
-        parents.into_iter().filter(|p| !seen.contains(p) && { seen.push(p.clone()); true }).collect()
-    };
-    parents.retain(|p| !p.is_empty());
+    let parents = graph.antichain(parents);
     if parents.is_empty() {
         traces.push(format!("⚠ move of [{leaf_id}] with no parents; skipped"));
         return;
@@ -920,6 +1001,7 @@ fn apply_reparent(graph: &mut Graph, distillant_id: String, parents: Vec<String>
             kept.push(p);
         }
     }
+    let kept = graph.antichain(kept);
     let m = graph.distillants.get_mut(&distillant_id).expect("checked above");
     m.parents = kept;
     let dest = if m.parents.is_empty() { "(crown root)".to_string() } else { m.parents.join("+") };
@@ -948,11 +1030,8 @@ fn apply_merge_leaf(graph: &mut Graph, from: String, into: String, now: u64, tra
             dst.evidence.push(e);
         }
     }
-    for p in src.parents {
-        if !dst.parents.contains(&p) {
-            dst.parents.push(p);
-        }
-    }
+    let mut homes = dst.parents.clone();
+    homes.extend(src.parents);
     dst.history.extend(src.history);
     dst.history.sort_by_key(|s| s.superseded_at);
     if dst.species == Species::Disposition {
@@ -967,6 +1046,8 @@ fn apply_merge_leaf(graph: &mut Graph, from: String, into: String, now: u64, tra
         (a, b) => a.or(b),
     };
     dst.updated_at = now;
+    let homes = graph.antichain(homes);
+    graph.leaves.get_mut(&into).expect("checked above").parents = homes;
     traces.push(format!("⊕ merged [{}] into [{}] (absorbed: {})", from, into, src.text));
 }
 
@@ -1065,6 +1146,157 @@ mod tests {
     }
 
     #[test]
+    fn bare_stub_has_no_line_and_announces_itself() {
+        let mut g = Graph::seed();
+        apply_ops(
+            &mut g,
+            vec![Op::State {
+                id: "x-report-run".into(),
+                distillants: vec!["work/x-engagement-report".into()],
+                text: "Ran the X report for Mason.".into(),
+                relation: Relation::Novel,
+                target: "".into(),
+                importance: 0.5,
+                aliases: vec![],
+                occurred_at: None,
+            }],
+            1_000,
+        );
+        let stub = &g.distillants["work/x-engagement-report"];
+        assert!(stub.is_bare(), "an auto-created distillant carries no line of its own");
+        assert_eq!(stub.label, "x engagement report");
+        assert_eq!(stub.parents, vec!["work"]);
+        assert!(
+            render_directory(&g).contains("work/x-engagement-report [registry] \"x engagement report\" — x engagement report (no line yet)"),
+            "the harvester's directory shows the stub as unwritten, never as a line"
+        );
+    }
+
+    #[test]
+    fn forget_is_parsed_applied_last_and_leaves_no_trace() {
+        let mut g = Graph::seed();
+        apply_ops(
+            &mut g,
+            vec![
+                Op::Episode { text: "Ate katsu curry for lunch.".into(), tags: vec!["life".into()], occurred_at: None },
+                Op::State {
+                    id: "eats-katsu-curry".into(),
+                    distillants: vec!["life".into()],
+                    text: "Eats katsu curry bento.".into(),
+                    relation: Relation::Novel,
+                    target: "".into(),
+                    importance: 0.3,
+                    aliases: vec![],
+                    occurred_at: None,
+                },
+            ],
+            1_000,
+        );
+        assert_eq!(g.episodes.len(), 1);
+
+        // The user asks to forget it in a later turn; the same harvest also
+        // (wrongly) restates the fact — the forget still wins, being last.
+        let raw = json!({
+            "states": [{
+                "id": "eats-katsu-curry",
+                "distillants": ["life"],
+                "text": "Eats katsu curry bento.",
+                "relation": "supports",
+                "target": "eats-katsu-curry",
+                "importance": 0.3,
+                "aliases": [],
+                "occurred_at": null
+            }],
+            "forgets": [{"target": "eats-katsu-curry"}, {"target": "never-existed"}]
+        })
+        .to_string();
+        let ops = parse_ops(&raw).unwrap();
+        assert!(matches!(ops.last(), Some(Op::Forget { .. })), "forgets sort last in apply order");
+        let traces = apply_ops(&mut g, ops, 2_000);
+        assert!(!g.leaves.contains_key("eats-katsu-curry"));
+        assert!(g.episodes.is_empty(), "the leaf's sole-evidence episode left the stream with it");
+        assert!(traces.iter().any(|t| t.starts_with("✗ forgot [eats-katsu-curry]")), "{traces:?}");
+        assert!(traces.iter().any(|t| t.contains("forget of unknown id [never-existed]")), "{traces:?}");
+        let table = RoutingTable::build(&g);
+        assert!(projection::project(&g, "katsu curry again?", 3_000).is_empty(), "nothing recalls it: {:?}", table.matches("katsu"));
+    }
+
+    #[test]
+    fn harvest_prompt_pins_every_disposition_regardless_of_routing() {
+        let mut g = Graph::seed();
+        apply_ops(
+            &mut g,
+            vec![Op::Disposition {
+                id: "frustrated-by-tool-failures".into(),
+                distillants: vec!["temperament".into()],
+                text: "grows frustrated when tools fail repeatedly".into(),
+                dir: 1,
+                note: "swore at a failed image edit".into(),
+                importance: 0.5,
+            }],
+            1_000,
+        );
+        // A turn whose words route nowhere near `temperament`.
+        let prompt = render_harvest_prompt(&g, "ugh, broken again", "sorry about that", 2_000);
+        assert!(
+            projection::project_with_caps(&g, "ugh, broken again", 2_000, 12, 48).is_empty(),
+            "sanity: the turn text does not route to the profile"
+        );
+        assert!(prompt.contains("# Profile axes (pinned"), "{prompt}");
+        assert!(
+            prompt.contains("- [frustrated-by-tool-failures] (under temperament) grows frustrated when tools fail repeatedly (axis +0.25, 1 observations)"),
+            "every axis is shown so the harvester nudges instead of minting: {prompt}"
+        );
+        assert!(prompt.contains("\"forgets\""), "the schema carries the forgets section");
+        assert!(prompt.contains("13. Forgetting is the user's call"));
+    }
+
+    #[test]
+    fn parent_sets_are_antichains_on_every_op_that_sets_them() {
+        let mut g = Graph::seed();
+        apply_ops(
+            &mut g,
+            vec![
+                Op::Distillant {
+                    id: "work/video".into(),
+                    tree: Tree::Registry,
+                    label: "Video".into(),
+                    line: "Video generation.".into(),
+                    routing: vec![],
+                    parents: vec!["work".into()],
+                },
+                Op::Distillant {
+                    id: "work/video/prompt-hack".into(),
+                    tree: Tree::Registry,
+                    label: "Prompt hack".into(),
+                    line: "A hack that interviews for a prompt.".into(),
+                    routing: vec![],
+                    parents: vec!["work".into(), "work/video".into()],
+                },
+                Op::State {
+                    id: "take-length".into(),
+                    distillants: vec!["work".into(), "work/video/prompt-hack".into()],
+                    text: "One continuous take.".into(),
+                    relation: Relation::Novel,
+                    target: "".into(),
+                    importance: 0.5,
+                    aliases: vec![],
+                    occurred_at: None,
+                },
+            ],
+            1_000,
+        );
+        assert_eq!(g.distillants["work/video/prompt-hack"].parents, vec!["work/video"], "declared under an ancestor and its descendant: the ancestor is implied");
+        assert_eq!(g.leaves["take-length"].parents, vec!["work/video/prompt-hack"]);
+
+        apply_ops(&mut g, vec![Op::Move { leaf: "take-length".into(), parents: vec!["work/video".into(), "work".into()] }], 1_100);
+        assert_eq!(g.leaves["take-length"].parents, vec!["work/video"]);
+
+        apply_ops(&mut g, vec![Op::Reparent { distillant: "work/video/prompt-hack".into(), parents: vec!["work".into(), "work/video".into()] }], 1_200);
+        assert_eq!(g.distillants["work/video/prompt-hack"].parents, vec!["work/video"]);
+    }
+
+    #[test]
     fn aliases_compile_into_routing_and_match_later() {
         let mut g = Graph::seed();
         apply_ops(&mut g, vec![state_op("rent-amount", "Rent is $2,200/mo.", Relation::Novel, "")], 1_000);
@@ -1086,6 +1318,7 @@ mod tests {
                 misc_count: 0,
                 consolidated_at: 0,
                 line_changed_at: 0,
+                forgotten_at: 0,
             },
         );
         g
@@ -1438,8 +1671,7 @@ mod tests {
         let leaf = &g.leaves["rent-a"];
         assert_eq!(leaf.belief.support, 2, "counts combine");
         assert_eq!(leaf.evidence.len(), 2, "evidence unions");
-        assert!(leaf.parents.contains(&"money/rent".to_string()));
-        assert!(leaf.parents.contains(&"money".to_string()), "parents union (DAG)");
+        assert_eq!(leaf.parents, vec!["money/rent"], "parents union, antichained: the crown is implied by money/rent");
         assert!((leaf.salience.importance - 0.9).abs() < 1e-6, "importance is max");
         assert!(traces.iter().any(|t| t.contains("merged [rent-b]")));
     }

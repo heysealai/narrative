@@ -29,7 +29,7 @@ narrative — structured long-term memory engine
   narrative map                   registry skeleton
   narrative stream [n]            last n episodes
   narrative stats                 residual / consolidation-pressure report
-  narrative forget <id>           drop a leaf or distillant
+  narrative forget <id>           forget a leaf or distillant (with its sole evidence)
 
 The project/harvest-prompt/apply subcommands externalize the model role:
 whatever intelligence drives the CLI plays agent and harvester. Memory lives
@@ -173,12 +173,16 @@ fn main() -> Result<()> {
         "stats" => print!("{}", consolidate::stats(&graph)),
         "forget" => {
             let id = args.get(1).map(String::as_str).unwrap_or("");
-            if graph.leaves.remove(id).is_some() || graph.distillants.remove(id).is_some() {
-                println!("✗ forgot {id}");
-                store::save(&data_file, &graph)?;
-            } else {
+            let Some(gone) = graph.forget(id, now) else {
                 bail!("nothing with id \"{id}\"");
-            }
+            };
+            println!(
+                "✗ forgot {id} — {} leaves, {} distillants, {} episodes left the graph",
+                gone.leaves.len(),
+                gone.distillants.len(),
+                gone.episodes.len()
+            );
+            store::save(&data_file, &graph)?;
         }
         other => bail!("unknown subcommand {other}\n\n{USAGE}"),
     }

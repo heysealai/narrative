@@ -132,6 +132,19 @@ There is no explicit `remember` tool taxing the live turn. Writes are ambient:
 - **Eviction-coupled distillation**: when the host's context approaches its eviction
   watermark, harvest the chunk about to phase out. Memory is, definitionally, **what
   survives forgetting**. (Hippocampus → cortex consolidation, as systems design.)
+- **Forgetting is the user's, and it is final.** "Forget that" / "stop remembering X" is
+  not a fact about the user to be classified — it is authority over what is held about
+  them. The harvester emits `forgets` naming the ids that hold the content, applied
+  after everything else in the batch; the runtime removes the leaf (or a distillant
+  with its subtree) and the stream episodes that were evidence for nothing else. An
+  episode restating the content, or one recording the request, would keep it
+  recallable — the contract forbids both. This is still not a live-turn tool: the ask
+  rides the same ambient harvest as every other write.
+- **The profile is pinned for the harvester too.** Cross-matching against a routed
+  sample lets the harvester mint a near-duplicate of an axis it was never shown, and
+  belief strength then never accumulates (every axis at one observation). Every
+  disposition rides in every harvest prompt, exactly as the profile rides pinned in
+  every recall; the harvester nudges by id.
 
 ### Contradiction cross-matching happens at write, via projection pointed backwards
 
@@ -171,7 +184,16 @@ host was a neobank agent).
   to phase out at the watermark): re-distill stale distillants, split/merge/rehome, notice
   slow drift, absorb a node's episodes into its summary (the entity/distillant *is* the
   consolidation product), graph hygiene (merge nodes that turned out to be the same person,
-  split conflations). Linking mistakes aren't fatal; they're deferred merges.
+  split conflations). Linking mistakes aren't fatal; they're deferred merges. Two
+  hygiene invariants ride on this: a **bare** distillant (a fact named it before any pass
+  wrote its line) carries the trigger's worth of pressure by itself, and the pass is shown
+  its same-named distillants elsewhere in the tree so it can `merge_into` one instead of
+  writing a duplicate a line; and **routing is replaced, not accreted** — harvest aliases
+  only ever append, so the pass returns the complete routing set (referring expressions
+  only, never episode detail or generic phrases) and the runtime swaps it in, re-deriving
+  facet families from the fresh line. **Parent sets are antichains**: a node never lists
+  an ancestor beside that ancestor's own descendant (the ancestor is implied and would
+  render the node twice); every op that sets parents normalizes.
 - **Drift** (the staleness trigger, derived — never stored): a line is a cached
   judgment, and the leaves keep living under it. Drift counts the evidence that the line no
   longer follows from its children: leaves that moved *against their own text* since the
@@ -239,11 +261,13 @@ Leaf {
 Distillant {
   id, label,
   line,                // one line; the cached judgment — keep it fresh or rot returns
+                       // (empty, or equal to the label = BARE: no pass has written it yet)
   routing_map: [keywords, aliases, anchors],   // compiled for mechanical projection;
                                                // facet terms only while the line carries them
-  parents: [distillant ids], children: [ids],
+  parents: [distillant ids], children: [ids],   // parents are an antichain (no ancestor beside its descendant)
   residual: misc_count,        // gradient accumulator: facts parked here for lack of better
   line_changed_at,       // stamped on MATERIAL line change; parents read it as drift
+  forgotten_at,          // stamped when a forget removed something held here; drift reads it
   // disagreement is DERIVED, not stored: see §Dynamics — Drift. Child timestamps
   // vs consolidated_at; a pass zeroes it by construction.
 }

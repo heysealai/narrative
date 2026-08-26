@@ -153,6 +153,7 @@ mod tests {
                     misc_count: 0,
                     consolidated_at: 0,
                     line_changed_at: 0,
+                    forgotten_at: 0,
                 },
             );
         }

@@ -48,8 +48,17 @@ Three stores, one routing table, two motions:
 **Write path (ambient, no remember-tool).** Every finished turn goes to the
 harvester, which emits structured ops — new leaves, supports / contradicts /
 supersedes classifications against existing facts, aliases, distillant
-creation, line rewrites. The runtime does all arithmetic: belief strength is
-derived from countable events, never model-assigned. Facet routing is derived
+creation, line rewrites, and **forgets**: when the user asks to forget or
+stop remembering something, the harvester names the ids that hold it and
+the content leaves every store — the leaf, and the stream episodes that were
+evidence for nothing else. Forgetting is the user's authority, applied last
+in the batch so nothing the same harvest wrote about the content survives
+it. The runtime does all arithmetic: belief strength is
+derived from countable events, never model-assigned. Cross-matching sees
+the **whole profile every time** (pinned for the harvester exactly as it is
+pinned for recall), so an observation about a tracked tendency lands as a
+nudge on that axis — belief strength can only accumulate on an axis the
+harvester can see. Facet routing is derived
 too — whatever evaluative families (trust, regret, fear…) a distillant's line
 carries are mirrored into its routing automatically; models write honest
 lines, the runtime compiles them.
@@ -67,9 +76,16 @@ leaves past the fat threshold, residual facts parked with nowhere better to
 go, and **drift** — derived evidence that the cached line no longer follows
 from its children (leaves that moved *against their own text* via
 contradiction, supersession, or a disposition flip; child lines that
-materially changed). The worst offender over the trigger gets one redistill
+materially changed). A distillant a fact named before any pass wrote its line is **bare**, and
+bare is the trigger's worth of pressure on its own. The worst offender over
+the trigger gets one redistill
 pass: rewrite the line grounded in what's actually below (the old line is a
-style reference, not a source), split fat nodes, merge duplicates. A due
+style reference, not a source), **replace** the routing set (routing only ever
+grew at harvest; the pass returns the complete set it should carry), split
+fat nodes, merge duplicates — and merge a distillant *away* into a same-named
+one elsewhere in the tree, which the pass is shown so a duplicate branch is a
+choice it can make. Parent sets are antichains: a node never lists an ancestor
+beside that ancestor's own descendant. A due
 child consolidates before its due parent, and an identical rewrite stamps
 nothing — cascades die where the summary absorbed the churn. The stream has
 its own species: past a soft cap, the oldest episodes get distilled into a
@@ -144,6 +160,10 @@ narrative redistill-prompt <distillant>      # that distillant's full contract
 narrative redistill <distillant> @out.json   # apply the redistill response
 narrative open <distillant> | profile | map | stream | stats | forget <id>
 ```
+
+`forget` takes a leaf, or a distillant with its whole subtree, and the stream
+episodes that were evidence for nothing else — the same removal the
+harvester's `forgets` op performs when the user asks in conversation.
 
 ## Module map
 

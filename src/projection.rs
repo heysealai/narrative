@@ -188,7 +188,7 @@ pub fn render_injection(graph: &Graph, p: &Projection, now: u64) -> Option<Strin
     );
     for o in &p.opened {
         if let Some(m) = graph.distillants.get(&o.distillant_id) {
-            let _ = writeln!(out, "## {} — {}", m.id, m.line);
+            let _ = writeln!(out, "## {} — {}", m.id, m.headline());
         }
         for id in &o.leaf_ids {
             render_leaf_line(&mut out, graph, id, now);
@@ -217,7 +217,7 @@ fn walk_tree(
     let Some(m) = graph.distillants.get(distillant_id) else { return };
     let indent = "  ".repeat(depth);
     let n_leaves = graph.leaves_under(distillant_id).len();
-    let _ = write!(out, "{indent}- {} — {}", m.id, m.line);
+    let _ = write!(out, "{indent}- {} — {}", m.id, m.headline());
     if !with_leaves && n_leaves > 0 {
         let _ = write!(out, " [{n_leaves} leaves]");
     }
@@ -271,7 +271,7 @@ pub fn render_open(graph: &Graph, distillant_id: &str, now: u64) -> String {
             "No distillant with id \"{distillant_id}\". Use an id exactly as it appears in the memory map."
         );
     };
-    let mut out = format!("# {} — {}\n", m.id, m.line);
+    let mut out = format!("# {} — {}\n", m.id, m.headline());
     let mut leaves = graph.leaves_under(distillant_id);
     leaves.sort_by(|a, b| {
         belief::score(b, now)
@@ -306,7 +306,7 @@ pub fn render_open(graph: &Graph, distillant_id: &str, now: u64) -> String {
                 out,
                 "- {} — {} [{} leaves]",
                 c.id,
-                c.line,
+                c.headline(),
                 graph.leaves_under(&c.id).len()
             );
         }
@@ -333,6 +333,7 @@ mod tests {
                 misc_count: 0,
                 consolidated_at: 0,
                 line_changed_at: 0,
+                forgotten_at: 0,
             },
         );
         for i in 0..8 {
@@ -418,6 +419,7 @@ mod tests {
                     misc_count: 0,
                     consolidated_at: 0,
                     line_changed_at: 0,
+                    forgotten_at: 0,
                 },
             );
             for i in 0..5 {
