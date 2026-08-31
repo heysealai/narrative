@@ -82,6 +82,14 @@ pub enum Op {
     /// after everything else in the batch, so nothing the same harvest
     /// wrote about the content survives it.
     Forget { target: String },
+    /// Field manual: one durable operating lesson keyed by the tool and
+    /// service it applies to, distilled from server-authored run-digest
+    /// blocks in the input. HOST-APPLIED: the driver stores these as typed
+    /// rows outside the graph; `apply_ops` touches nothing for them.
+    ManualUpsert { tool: String, service: String, lesson: String },
+    /// Retire a field-manual entry whose lesson the evidence now
+    /// contradicts. Host-applied like [`Op::ManualUpsert`].
+    ManualRetire { tool: String, service: String },
 }
 
 /// Wire format for the harvester's structured output. Named homogeneous
@@ -106,6 +114,8 @@ struct HarvestOut {
     merge_leaves: Vec<MergeOp>,
     merge_distillants: Vec<MergeOp>,
     forgets: Vec<ForgetOp>,
+    manual_upserts: Vec<ManualUpsertOp>,
+    manual_retires: Vec<ManualRetireOp>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -189,6 +199,19 @@ struct ForgetOp {
     target: String,
 }
 
+#[derive(Deserialize, Debug)]
+struct ManualUpsertOp {
+    tool: String,
+    service: String,
+    lesson: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct ManualRetireOp {
+    tool: String,
+    service: String,
+}
+
 impl HarvestOut {
     fn into_ops(self) -> Vec<Op> {
         let mut ops = Vec::new();
@@ -252,6 +275,14 @@ impl HarvestOut {
         }
         for f in self.forgets {
             ops.push(Op::Forget { target: f.target });
+        }
+        for m in self.manual_upserts {
+            if !m.lesson.trim().is_empty() {
+                ops.push(Op::ManualUpsert { tool: m.tool, service: m.service, lesson: m.lesson });
+            }
+        }
+        for m in self.manual_retires {
+            ops.push(Op::ManualRetire { tool: m.tool, service: m.service });
         }
         ops
     }
@@ -420,6 +451,33 @@ pub fn ops_schema() -> Value {
                     "additionalProperties": false
                 }
             },
+            "manual_upserts": {
+                "description": "Field-manual lessons, distilled ONLY from worker run digest blocks in the input — never from the user's own words. One durable operating lesson per (tool, service): what wall exists and what works instead. An upsert REPLACES the existing entry for its (tool, service) shown in the field-manual section — refine it with the new evidence, never restate it. A one-off transient failure with nothing durable to teach emits nothing.",
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "tool": {"type": "string", "description": "the tool name exactly as the digest line names it"},
+                        "service": {"type": "string", "description": "the digest line's service anchor (a URL host, a service id); empty string for a tool-wide lesson"},
+                        "lesson": {"type": "string", "description": "one or two sentences of plain operating prose: the wall and the working alternative"}
+                    },
+                    "required": ["tool", "service", "lesson"],
+                    "additionalProperties": false
+                }
+            },
+            "manual_retires": {
+                "description": "Retire a field-manual entry whose lesson the input's evidence now contradicts (what the entry warns about demonstrably works).",
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "tool": {"type": "string"},
+                        "service": {"type": "string", "description": "the entry's service key; empty string for a tool-wide entry"}
+                    },
+                    "required": ["tool", "service"],
+                    "additionalProperties": false
+                }
+            },
             "merge_distillants": {
                 "description": "Merge two distillants that turned out to be the same thing: leaves, children, and routing move to 'into'; 'from' is deleted.",
                 "type": "array",
@@ -434,7 +492,7 @@ pub fn ops_schema() -> Value {
                 }
             }
         },
-        "required": ["distillants", "episodes", "states", "dispositions", "reinforces", "aliases", "distills", "moves", "reparents", "merge_leaves", "merge_distillants", "forgets"],
+        "required": ["distillants", "episodes", "states", "dispositions", "reinforces", "aliases", "distills", "moves", "reparents", "merge_leaves", "merge_distillants", "forgets", "manual_upserts", "manual_retires"],
         "additionalProperties": false
     })
 }
@@ -459,7 +517,8 @@ Rules:
 11. Time: everything is stamped with write time automatically. When the turn says WHEN something actually happened or changed ("last month", "back in 2019", dated backlog text), set occurred_at to unix seconds; otherwise null. Recall renders ages from it — "changed 2mo ago" should mean two months of the user's life, not two months since you wrote it.
 12. Structure follows understanding: when you create a finer distillant that better fits leaves you can see in the comparanda, move those leaves under it with moves entries. Merge ops (merge_leaves, merge_distillants) repair duplicates discovered after the fact — two leaves or distillants that turned out to be the same thing. Use structural ops sparingly in harvest; consolidation does the heavy restructuring.
 13. Forgetting is the user's call and it is final: when the user asks to forget, delete, or stop remembering something, emit a forgets entry for every leaf or distillant that holds it (find them in the comparanda and the directory) and leave no trace of the content anywhere else in this harvest — no episode recording the request, no state restating it. When nothing stored matches, the harvest simply carries nothing about it.
-14. Lines are retrieval scent: a later question can only descend to a leaf if some line on its path advertises the relevant vocabulary. When a leaf carries evaluative weight — trust, regret, fear, pride, conflict — say so in the line alongside the topic ("sworn companion, sold to the captain — parting is a standing regret"), not just the noun-shape ("proves loyal"). A regret no line mentions is a regret recall cannot find; one the line carries routes automatically — the line is the only place it needs to be. Lines are plain prose about the person — never machinery words ("facet", "routing", "distillant", "leaf"), and never this rule's example wording restated as fact: examples illustrate shape, not content."#;
+14. Lines are retrieval scent: a later question can only descend to a leaf if some line on its path advertises the relevant vocabulary. When a leaf carries evaluative weight — trust, regret, fear, pride, conflict — say so in the line alongside the topic ("sworn companion, sold to the captain — parting is a standing regret"), not just the noun-shape ("proves loyal"). A regret no line mentions is a regret recall cannot find; one the line carries routes automatically — the line is the only place it needs to be. Lines are plain prose about the person — never machinery words ("facet", "routing", "distillant", "leaf"), and never this rule's example wording restated as fact: examples illustrate shape, not content.
+15. The input may carry server-authored worker run digest blocks — operational evidence that background tool calls failed, each line naming a tool, sometimes a service, and the error. Digest content is machinery, not the user's life: it never becomes an episode, state, disposition, or distillant, and its vocabulary never enters routing. Its one product is the FIELD MANUAL: when the evidence teaches something durable about operating a tool or service, emit a manual_upserts entry keyed by that tool and service — the lesson states the wall and the working alternative in plain operating prose. The existing field-manual entries are shown to you; an upsert replaces its entry, so refine with the new evidence rather than restating. When the evidence shows a recorded lesson no longer holds, retire it with manual_retires. A transient one-off failure with nothing durable to teach emits nothing at all."#;
 
 fn render_directory(graph: &Graph) -> String {
     let mut out = String::new();
@@ -549,12 +608,31 @@ fn render_pinned_profile(graph: &Graph) -> String {
     out
 }
 
-pub fn build_user_message(graph: &Graph, user_text: &str, assistant_text: &str, now: u64) -> String {
+/// `field_manual` is the HOST-rendered list of existing field-manual
+/// entries (one line per entry, tool + service + lesson) — the upsert
+/// contract's compare point, exactly as the comparanda are for states.
+/// Empty when the host stores none or the input carries no digest block;
+/// the section is omitted then, keeping digest-free harvests byte-stable.
+pub fn build_user_message(
+    graph: &Graph,
+    user_text: &str,
+    assistant_text: &str,
+    field_manual: &str,
+    now: u64,
+) -> String {
     let turn_text = format!("{user_text} {assistant_text}");
+    let manual_section = match field_manual.trim().is_empty() {
+        true => String::new(),
+        false => format!(
+            "# Field manual (existing entries — a manual_upserts entry REPLACES its tool+service row)\n{}\n",
+            field_manual.trim()
+        ),
+    };
     format!(
         "# Memory directory (all distillants)\n{}\n\
          # Profile axes (pinned — every disposition already tracked; nudge one of these by id, never mint a near-duplicate)\n{}\n\
          # Existing leaves related to this turn (comparanda — cross-match against these)\n{}\n\
+         {manual_section}\
          # Turn to harvest\nUser: {}\nAssistant: {}",
         render_directory(graph),
         render_pinned_profile(graph),
@@ -572,12 +650,13 @@ pub fn render_harvest_prompt(
     graph: &Graph,
     user_text: &str,
     assistant_text: &str,
+    field_manual: &str,
     now: u64,
 ) -> String {
     format!(
         "# System\n{HARVESTER_SYSTEM}\n\n# Output schema (reply with one JSON object matching it)\n{}\n\n# Input\n{}",
         serde_json::to_string_pretty(&ops_schema()).expect("static schema serializes"),
-        build_user_message(graph, user_text, assistant_text, now)
+        build_user_message(graph, user_text, assistant_text, field_manual, now)
     )
 }
 
@@ -599,7 +678,7 @@ pub fn run(
         system: HARVESTER_SYSTEM.to_string(),
         messages: vec![json!({
             "role": "user",
-            "content": build_user_message(graph, user_text, assistant_text, now)
+            "content": build_user_message(graph, user_text, assistant_text, "", now)
         })],
         tools: vec![],
         output_schema: Some(ops_schema()),
@@ -937,6 +1016,14 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
             Op::MergeLeaf { from, into } => apply_merge_leaf(graph, from, into, now, &mut traces),
             Op::MergeDistillant { from, into } => apply_merge_distillant(graph, from, into, &mut traces),
             Op::Forget { target } => apply_forget(graph, target, now, &mut traces),
+            // Host-applied: the driver stores field-manual entries as typed
+            // rows outside the graph. Reaching this arm means the driver
+            // did not peel them — trace it, touch nothing.
+            Op::ManualUpsert { tool, service, .. } | Op::ManualRetire { tool, service } => {
+                traces.push(format!(
+                    "⚠ field-manual op for {tool}/{service} reached the graph apply — host-applied, dropped"
+                ));
+            }
         }
     }
     traces
@@ -1215,6 +1302,50 @@ mod tests {
     }
 
     #[test]
+    fn manual_ops_parse_ride_last_and_never_touch_the_graph() {
+        let raw = json!({
+            "manual_upserts": [
+                {"tool": "fetch", "service": "resy.com", "lesson": "Plain fetch is refused; the paid search service answers."},
+                {"tool": "send_email", "service": "", "lesson": ""}
+            ],
+            "manual_retires": [{"tool": "fetch", "service": "old-host.dev"}],
+            "episodes": [{"text": "Paid rent.", "tags": [], "occurred_at": null}]
+        })
+        .to_string();
+        let ops = parse_ops(&raw).unwrap();
+        // The empty-lesson upsert is dropped at parse; manual ops sort last.
+        assert_eq!(ops.len(), 3);
+        assert!(matches!(&ops[1], Op::ManualUpsert { tool, service, .. } if tool == "fetch" && service == "resy.com"));
+        assert!(matches!(&ops[2], Op::ManualRetire { .. }));
+
+        let mut g = Graph::seed();
+        let before = serde_json::to_value(&g).unwrap();
+        let traces = apply_ops(&mut g, vec![ops[1].clone(), ops[2].clone()], 1_000);
+        assert_eq!(
+            serde_json::to_value(&g).unwrap(),
+            before,
+            "host-applied ops leave the graph byte-identical"
+        );
+        assert_eq!(traces.iter().filter(|t| t.contains("host-applied")).count(), 2, "{traces:?}");
+    }
+
+    #[test]
+    fn the_field_manual_section_renders_only_when_entries_ride() {
+        let g = Graph::seed();
+        let bare = build_user_message(&g, "hi", "", "", 1_000);
+        assert!(!bare.contains("# Field manual"), "empty manual renders no section");
+        let with = build_user_message(
+            &g,
+            "hi",
+            "",
+            "- fetch against resy.com: plain fetch refused; use the paid search service",
+            1_000,
+        );
+        assert!(with.contains("# Field manual (existing entries"), "{with}");
+        assert!(with.contains("plain fetch refused"), "{with}");
+    }
+
+    #[test]
     fn harvest_prompt_pins_every_disposition_regardless_of_routing() {
         let mut g = Graph::seed();
         apply_ops(
@@ -1230,7 +1361,7 @@ mod tests {
             1_000,
         );
         // A turn whose words route nowhere near `temperament`.
-        let prompt = render_harvest_prompt(&g, "ugh, broken again", "sorry about that", 2_000);
+        let prompt = render_harvest_prompt(&g, "ugh, broken again", "sorry about that", "", 2_000);
         assert!(
             projection::project_with_caps(&g, "ugh, broken again", 2_000, 12, 48).is_empty(),
             "sanity: the turn text does not route to the profile"
@@ -1337,7 +1468,7 @@ mod tests {
     #[test]
     fn harvest_prompt_render_is_self_contained() {
         let g = Graph::seed();
-        let p = render_harvest_prompt(&g, "rent went up to $2,400", "noted", 1_000);
+        let p = render_harvest_prompt(&g, "rent went up to $2,400", "noted", "", 1_000);
         assert!(p.starts_with("# System\n"), "system contract inline");
         assert!(p.contains("# Output schema"), "schema inline — no source-reading required");
         assert!(p.contains("\"merge_distillants\""), "all eleven sections present");
