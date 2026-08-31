@@ -101,7 +101,7 @@ fn main() -> Result<()> {
                 Some(a) => text_arg(a)?,
                 None => String::new(),
             };
-            println!("{}", harvest::render_harvest_prompt(&graph, &user, &assistant, now));
+            println!("{}", harvest::render_harvest_prompt(&graph, &user, &assistant, "", now));
         }
         "apply" => {
             let src = match args.get(1).map(String::as_str) {
