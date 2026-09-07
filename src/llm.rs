@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 pub const DEFAULT_MODEL: &str = "claude-opus-4-8";
@@ -36,6 +37,36 @@ pub struct ChatRequest {
 pub struct ChatResponse {
     pub content: Vec<Value>,
     pub stop_reason: String,
+    pub usage: Usage,
+}
+
+/// The provider's token accounting for one call — zero when the transport
+/// carries none (the mock).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Usage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cache_read_input_tokens: u64,
+    pub cache_creation_input_tokens: u64,
+}
+
+impl Usage {
+    fn from_api(v: &Value) -> Usage {
+        let count = |field: &str| v[field].as_u64().unwrap_or(0);
+        Usage {
+            input_tokens: count("input_tokens"),
+            output_tokens: count("output_tokens"),
+            cache_read_input_tokens: count("cache_read_input_tokens"),
+            cache_creation_input_tokens: count("cache_creation_input_tokens"),
+        }
+    }
+
+    pub fn add(&mut self, other: Usage) {
+        self.input_tokens += other.input_tokens;
+        self.output_tokens += other.output_tokens;
+        self.cache_read_input_tokens += other.cache_read_input_tokens;
+        self.cache_creation_input_tokens += other.cache_creation_input_tokens;
+    }
 }
 
 impl ChatResponse {
@@ -78,6 +109,9 @@ pub struct AnthropicClient {
     api_key: String,
     pub model: String,
     base_url: String,
+    /// The API's `output_config.effort` dial (`NARRATIVE_EFFORT`); None =
+    /// the API's own default.
+    effort: Option<String>,
 }
 
 impl AnthropicClient {
@@ -87,12 +121,13 @@ impl AnthropicClient {
         let model = std::env::var("NARRATIVE_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.to_string());
         let base_url = std::env::var("ANTHROPIC_BASE_URL")
             .unwrap_or_else(|_| "https://api.anthropic.com".to_string());
+        let effort = std::env::var("NARRATIVE_EFFORT").ok();
         let agent = ureq::AgentBuilder::new()
             .timeout_connect(Duration::from_secs(10))
             .timeout_read(Duration::from_secs(300))
             .timeout_write(Duration::from_secs(30))
             .build();
-        Ok(AnthropicClient { agent, api_key, model, base_url })
+        Ok(AnthropicClient { agent, api_key, model, base_url, effort })
     }
 
     fn supports_adaptive_thinking(&self) -> bool {
@@ -105,9 +140,13 @@ impl AnthropicClient {
         let mut body = json!({
             "model": self.model,
             "max_tokens": req.max_tokens,
-            "system": req.system,
             "messages": req.messages,
         });
+        // A keyless prompt carries its contract inside the user message;
+        // an empty system block is not a request the API accepts.
+        if !req.system.is_empty() {
+            body["system"] = json!(req.system);
+        }
         if req.thinking && self.supports_adaptive_thinking() {
             body["thinking"] = json!({"type": "adaptive"});
         }
@@ -126,7 +165,10 @@ impl AnthropicClient {
             );
         }
         if let Some(schema) = &req.output_schema {
-            body["output_config"] = json!({"format": {"type": "json_schema", "schema": schema}});
+            body["output_config"]["format"] = json!({"type": "json_schema", "schema": schema});
+        }
+        if let Some(effort) = &self.effort {
+            body["output_config"]["effort"] = json!(effort);
         }
         body
     }
@@ -173,6 +215,7 @@ impl Llm for AnthropicClient {
         Ok(ChatResponse {
             content: v["content"].as_array().cloned().unwrap_or_default(),
             stop_reason: v["stop_reason"].as_str().unwrap_or_default().to_string(),
+            usage: Usage::from_api(&v["usage"]),
         })
     }
 
@@ -239,6 +282,7 @@ impl Llm for MockLlm {
             return Ok(ChatResponse {
                 content: content.as_array().cloned().unwrap_or_default(),
                 stop_reason: stop.to_string(),
+                usage: Usage::default(),
             });
         }
         // Unscripted: auto-behavior good enough to drive the loop offline.
@@ -255,6 +299,7 @@ impl Llm for MockLlm {
                 return Ok(ChatResponse {
                     content: vec![json!({"type": "text", "text": out.to_string()})],
                     stop_reason: "end_turn".to_string(),
+                    usage: Usage::default(),
                 });
             }
             // Digest prompts carry the stream headers; answer with a marked
@@ -268,6 +313,7 @@ impl Llm for MockLlm {
                 return Ok(ChatResponse {
                     content: vec![json!({"type": "text", "text": out.to_string()})],
                     stop_reason: "end_turn".to_string(),
+                    usage: Usage::default(),
                 });
             }
             // Harvest prompts end with "# Turn to harvest\nUser: ...".
@@ -285,11 +331,13 @@ impl Llm for MockLlm {
             return Ok(ChatResponse {
                 content: vec![json!({"type": "text", "text": ops.to_string()})],
                 stop_reason: "end_turn".to_string(),
+                usage: Usage::default(),
             });
         }
         Ok(ChatResponse {
             content: vec![json!({"type": "text", "text": "[mock] noted."})],
             stop_reason: "end_turn".to_string(),
+            usage: Usage::default(),
         })
     }
 
@@ -311,6 +359,7 @@ mod tests {
                 json!({"type": "text", "text": "b"}),
             ],
             stop_reason: "end_turn".into(),
+            usage: Usage::default(),
         };
         assert_eq!(r.text(), "ab");
     }

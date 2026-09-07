@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 
 use narrative::llm::{AnthropicClient, Llm, MockLlm};
 use narrative::sim::{run_repl, Sim};
-use narrative::{consolidate, harvest, model, projection, store};
+use narrative::{consolidate, harvest, model, projection, replay, store};
 
 const USAGE: &str = "\
 narrative — structured long-term memory engine
@@ -30,6 +30,10 @@ narrative — structured long-term memory engine
   narrative stream [n]            last n episodes
   narrative stats                 residual / consolidation-pressure report
   narrative forget <id>           forget a leaf or distillant (with its sole evidence)
+  narrative replay <turns.json> <full|compact|selective> <report.json>
+                                  drive the harvester over recorded turns from the
+                                  stored graph under one directory scope, writing
+                                  the graph after each turn and a per-turn report
 
 The project/harvest-prompt/apply subcommands externalize the model role:
 whatever intelligence drives the CLI plays agent and harvester. Memory lives
@@ -183,6 +187,22 @@ fn main() -> Result<()> {
                 gone.episodes.len()
             );
             store::save(&data_file, &graph)?;
+        }
+        "replay" => {
+            let (Some(turns_path), Some(scope), Some(report_path)) = (args.get(1), args.get(2), args.get(3))
+            else {
+                bail!("replay <turns.json> <full|compact|selective> <report.json>");
+            };
+            let Some(scope) = harvest::DirectoryScope::parse(scope) else {
+                bail!("replay: the scope is full, compact or selective");
+            };
+            let llm: Box<dyn Llm> = if mock {
+                Box::new(MockLlm::default())
+            } else {
+                Box::new(AnthropicClient::from_env()?)
+            };
+            let turns: replay::Turns = serde_json::from_str(&std::fs::read_to_string(turns_path)?)?;
+            replay::run(llm.as_ref(), &mut graph, &data_file, &turns, scope, std::path::Path::new(report_path))?;
         }
         other => bail!("unknown subcommand {other}\n\n{USAGE}"),
     }
