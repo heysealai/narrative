@@ -74,6 +74,20 @@ pub fn project_with_caps(
     total_cap: usize,
 ) -> Projection {
     let table = RoutingTable::build(graph);
+    project_with_table(graph, &table, text, now, per_distillant, total_cap)
+}
+
+/// The projection over a routing table the caller already built — the
+/// harvester matches the same turn against the same table twice (directory
+/// and comparanda) and builds it once.
+pub fn project_with_table(
+    graph: &Graph,
+    table: &RoutingTable,
+    text: &str,
+    now: u64,
+    per_distillant: usize,
+    total_cap: usize,
+) -> Projection {
     // Rank matches: lexical score first, then the best leaf underneath
     // (relevance × recency × importance, mechanically). The leaf budget
     // below goes to the best-ranked matches — table order was alphabetical,

@@ -16,9 +16,10 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::harvest::{self, DirectoryScope, Op, Relation};
+use crate::harvest::{self, DirectoryScope, Neighborhood, Op, Relation};
 use crate::llm::{ChatRequest, Llm, Usage};
 use crate::model::Graph;
+use crate::routing::RoutingTable;
 use crate::store;
 
 /// The host's response cap for one harvest.
@@ -67,10 +68,11 @@ pub struct TurnReport {
     pub seq: u64,
     pub at: String,
     pub prompt_chars: usize,
-    /// How many distillants the turn's routing match opened (with their
-    /// ancestors) — the selective scope's expanded set; a property of the
-    /// turn against the graph, reported under every scope.
-    pub opened_distillants: usize,
+    /// The turn's [`Neighborhood`] — the distillants on the branches it is
+    /// on, and the ones beside them — a property of the turn against the
+    /// graph, reported under every scope.
+    pub on_branch_distillants: usize,
+    pub beside_distillants: usize,
     pub usage: Usage,
     pub stop_reason: String,
     pub elapsed_ms: u128,
@@ -135,7 +137,7 @@ pub fn run(
     let mut reports: Vec<TurnReport> = Vec::new();
     for turn in &turns.turns {
         let turn_text = transcript(turn);
-        let opened_distillants = harvest::opened_neighborhood(graph, &turn_text).len();
+        let neighborhood = Neighborhood::open(graph, &RoutingTable::build(graph), &turn_text);
         let prompt = harvest::render_harvest_prompt_scoped(graph, &turn_text, "", "", turn.at_epoch, scope);
         let prompt_chars = prompt.len();
         let request = ChatRequest {
@@ -187,7 +189,8 @@ pub fn run(
             seq: turn.seq,
             at: turn.at.clone(),
             prompt_chars,
-            opened_distillants,
+            on_branch_distillants: neighborhood.on_branch.len(),
+            beside_distillants: neighborhood.beside.len(),
             usage,
             stop_reason,
             elapsed_ms: started.elapsed().as_millis(),

@@ -3,6 +3,7 @@
 //! them. Contradiction cross-matching happens here, against comparanda
 //! pre-opened by projection pointed backwards at the turn text.
 
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use anyhow::{Context, Result};
@@ -523,19 +524,55 @@ Rules:
 /// What the harvester sees of the distillant layer. Every scope shows every
 /// distillant BY ID, so a fact can always be filed under an existing node;
 /// the scopes differ in how much judgment rides along with the id.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[serde(rename_all = "snake_case")]
+/// `Selective` is the contract (DESIGN.md, write path); the other two exist
+/// for the replay that measured it (docs/harvest-scope-replay.md).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DirectoryScope {
     /// Every distillant with its line and its whole routing vocabulary.
     Full,
-    /// Every distillant with its routing vocabulary and no line — the
-    /// design contract's directory (labels plus aliases).
+    /// Every distillant with its routing vocabulary and no line.
     Compact,
-    /// Every distillant by id and label; the line and routing vocabulary
-    /// only on the neighborhood the turn touches: the distillants its
-    /// routing match opened, their ancestors up to the root, and their
-    /// children.
+    /// Every distillant by id and label; the [`Neighborhood`] the turn
+    /// touches expanded — its branches with line and routing, the
+    /// branches' children with their line.
     Selective,
+}
+
+/// The distillants a turn touches, read leaf to root. `on_branch`: the
+/// routing hits and every ancestor up to the root — the branches the turn
+/// is on, where the harvester files and whose routing it extends. `beside`:
+/// every hit's children — the level the turn is on, the siblings a new
+/// fact lands among, which the harvester recognizes by what they say (a
+/// child named only by its label is a twin waiting to happen). Every hit
+/// counts, a hit that another hit sits under included: the turn is on that
+/// level too, and a sibling of the deeper hit is where its fact may belong.
+/// A distillant in neither set is an index line.
+#[derive(Default, Debug, PartialEq, Eq)]
+pub struct Neighborhood {
+    pub on_branch: BTreeSet<String>,
+    pub beside: BTreeSet<String>,
+}
+
+impl Neighborhood {
+    pub fn open(graph: &Graph, table: &routing::RoutingTable, turn_text: &str) -> Neighborhood {
+        let hits = table.matches(turn_text);
+        let mut on_branch = BTreeSet::new();
+        let mut pending = hits.clone();
+        while let Some(id) = pending.pop() {
+            let Some(m) = graph.distillants.get(&id) else { continue };
+            if !on_branch.insert(id) {
+                continue;
+            }
+            pending.extend(m.parents.iter().cloned());
+        }
+        let beside = hits
+            .iter()
+            .flat_map(|hit| graph.child_distillants(hit))
+            .map(|child| child.id.clone())
+            .filter(|id| !on_branch.contains(id))
+            .collect();
+        Neighborhood { on_branch, beside }
+    }
 }
 
 impl DirectoryScope {
@@ -547,29 +584,6 @@ impl DirectoryScope {
             _ => None,
         }
     }
-}
-
-/// The distillants a turn opens: the routing match's hits in both trees,
-/// every ancestor up to the root (the context a fact is read in), and the
-/// hits' children (the siblings among which a new fact would be placed —
-/// a hit's child described without its name is otherwise an index line the
-/// harvester cannot recognize, and the fact gets a twin beside it).
-pub fn opened_neighborhood(graph: &Graph, turn_text: &str) -> std::collections::BTreeSet<String> {
-    let table = routing::RoutingTable::build(graph);
-    let hits = table.matches(turn_text);
-    let mut neighborhood = std::collections::BTreeSet::new();
-    let mut pending = hits.clone();
-    while let Some(id) = pending.pop() {
-        let Some(m) = graph.distillants.get(&id) else { continue };
-        if !neighborhood.insert(id) {
-            continue;
-        }
-        pending.extend(m.parents.iter().cloned());
-    }
-    for hit in &hits {
-        neighborhood.extend(graph.child_distillants(hit).into_iter().map(|c| c.id.clone()));
-    }
-    neighborhood
 }
 
 /// One directory entry: the id, tree and label always; the line and the
@@ -590,10 +604,15 @@ fn directory_entry(m: &Distillant, with_line: bool, with_routing: bool) -> Strin
     entry
 }
 
-fn render_directory_scoped(graph: &Graph, turn_text: &str, scope: DirectoryScope) -> String {
+fn render_directory_scoped(
+    graph: &Graph,
+    scope: DirectoryScope,
+    table: &routing::RoutingTable,
+    turn_text: &str,
+) -> String {
     let neighborhood = match scope {
-        DirectoryScope::Full | DirectoryScope::Compact => None,
-        DirectoryScope::Selective => Some(opened_neighborhood(graph, turn_text)),
+        DirectoryScope::Full | DirectoryScope::Compact => Neighborhood::default(),
+        DirectoryScope::Selective => Neighborhood::open(graph, table, turn_text),
     };
     let mut out = String::new();
     for m in graph.distillants.values() {
@@ -601,8 +620,9 @@ fn render_directory_scoped(graph: &Graph, turn_text: &str, scope: DirectoryScope
             DirectoryScope::Full => (true, true),
             DirectoryScope::Compact => (false, true),
             DirectoryScope::Selective => {
-                let opened = neighborhood.as_ref().is_some_and(|n| n.contains(&m.id));
-                (opened, opened)
+                let on_branch = neighborhood.on_branch.contains(&m.id);
+                let beside = neighborhood.beside.contains(&m.id);
+                (on_branch || beside, on_branch)
             }
         };
         out.push_str(&directory_entry(m, with_line, with_routing));
@@ -615,9 +635,10 @@ fn render_directory_scoped(graph: &Graph, turn_text: &str, scope: DirectoryScope
 const HARVEST_PER_MIDPOINT_CAP: usize = 12;
 const HARVEST_TOTAL_CAP: usize = 48;
 
-fn render_comparanda(graph: &Graph, turn_text: &str, now: u64) -> String {
-    let p = projection::project_with_caps(
+fn render_comparanda(graph: &Graph, table: &routing::RoutingTable, turn_text: &str, now: u64) -> String {
+    let p = projection::project_with_table(
         graph,
+        table,
         turn_text,
         now,
         HARVEST_PER_MIDPOINT_CAP,
@@ -692,6 +713,7 @@ pub fn build_user_message(
     scope: DirectoryScope,
 ) -> String {
     let turn_text = format!("{user_text} {assistant_text}");
+    let table = routing::RoutingTable::build(graph);
     let manual_section = match field_manual.trim().is_empty() {
         true => String::new(),
         false => format!(
@@ -702,7 +724,7 @@ pub fn build_user_message(
     let directory_heading = match scope {
         DirectoryScope::Full | DirectoryScope::Compact => "# Memory directory (all distillants)",
         DirectoryScope::Selective => {
-            "# Memory directory (every distillant by id; the line and routing of the branches this turn opened)"
+            "# Memory directory (every distillant by id; the branches this turn is on carry their line and routing, their children their line)"
         }
     };
     format!(
@@ -711,9 +733,9 @@ pub fn build_user_message(
          # Existing leaves related to this turn (comparanda — cross-match against these)\n{}\n\
          {manual_section}\
          # Turn to harvest\nUser: {}\nAssistant: {}",
-        render_directory_scoped(graph, &turn_text, scope),
+        render_directory_scoped(graph, scope, &table, &turn_text),
         render_pinned_profile(graph),
-        render_comparanda(graph, &turn_text, now),
+        render_comparanda(graph, &table, &turn_text, now),
         user_text,
         assistant_text
     )
@@ -722,7 +744,7 @@ pub fn build_user_message(
 /// The keyless prompt: system contract, the exact output schema, and the
 /// rendered input — self-contained, like `render_digest_prompt` and
 /// `render_redistill_prompt`. A driver holding only this render can play
-/// the harvester role.
+/// the harvester role. The directory is the design's, [`DirectoryScope::Selective`].
 pub fn render_harvest_prompt(
     graph: &Graph,
     user_text: &str,
@@ -730,11 +752,11 @@ pub fn render_harvest_prompt(
     field_manual: &str,
     now: u64,
 ) -> String {
-    render_harvest_prompt_scoped(graph, user_text, assistant_text, field_manual, now, DirectoryScope::Full)
+    render_harvest_prompt_scoped(graph, user_text, assistant_text, field_manual, now, DirectoryScope::Selective)
 }
 
-/// The keyless prompt under a chosen [`DirectoryScope`]; the full scope is
-/// the contract every host renders today.
+/// The keyless prompt under a chosen [`DirectoryScope`], for the replay
+/// that compares them.
 pub fn render_harvest_prompt_scoped(
     graph: &Graph,
     user_text: &str,
@@ -768,7 +790,7 @@ pub fn run(
         system: HARVESTER_SYSTEM.to_string(),
         messages: vec![json!({
             "role": "user",
-            "content": build_user_message(graph, user_text, assistant_text, "", now, DirectoryScope::Full)
+            "content": build_user_message(graph, user_text, assistant_text, "", now, DirectoryScope::Selective)
         })],
         tools: vec![],
         output_schema: Some(ops_schema()),
@@ -1337,7 +1359,7 @@ mod tests {
         assert_eq!(stub.label, "x engagement report");
         assert_eq!(stub.parents, vec!["work"]);
         assert!(
-            render_directory_scoped(&g, "", DirectoryScope::Full).contains("work/x-engagement-report [registry] \"x engagement report\" — x engagement report (no line yet)"),
+            render_directory_scoped(&g, DirectoryScope::Full, &routing::RoutingTable::build(&g), "").contains("work/x-engagement-report [registry] \"x engagement report\" — x engagement report (no line yet)"),
             "the harvester's directory shows the stub as unwritten, never as a line"
         );
     }
@@ -1376,28 +1398,52 @@ mod tests {
             1_000,
         );
         let turn = "the landlord raised the rent";
-        let selective = render_directory_scoped(&g, turn, DirectoryScope::Selective);
+        let table = routing::RoutingTable::build(&g);
+        let neighborhood = Neighborhood::open(&g, &table, turn);
+        assert!(neighborhood.on_branch.contains("money/rent") && neighborhood.on_branch.contains("money"), "{neighborhood:?}");
+        assert_eq!(neighborhood.beside.iter().collect::<Vec<_>>(), vec!["money/rent/deposit"], "{neighborhood:?}");
+        // A hit that sits above another hit is a level the turn is on too:
+        // its other children are beside, whatever the deeper hit.
+        apply_ops(
+            &mut g,
+            vec![Op::Distillant {
+                id: "money/taxes".into(),
+                tree: Tree::Registry,
+                label: "Taxes".into(),
+                line: "The yearly filing.".into(),
+                routing: vec!["taxes".into()],
+                parents: vec!["money".into()],
+            }],
+            1_000,
+        );
+        let table = routing::RoutingTable::build(&g);
+        let money_label = g.distillants["money"].label.clone();
+        let both = Neighborhood::open(&g, &table, &format!("{money_label} — the landlord raised the rent"));
+        assert!(both.on_branch.contains("money") && both.on_branch.contains("money/rent"), "{both:?}");
+        assert!(both.beside.contains("money/taxes"), "the root is hit, so its other children are beside: {both:?}");
+        assert!(both.beside.contains("money/rent/deposit"), "{both:?}");
+        let selective = render_directory_scoped(&g, DirectoryScope::Selective, &table, turn);
         assert!(
             selective.contains("- money/rent [registry] \"Rent\" — Rent and landlord dealings. | routing: rent, landlord\n"),
-            "the opened branch carries its line and routing: {selective}"
+            "the branch the turn is on carries its line and routing: {selective}"
         );
         assert!(
-            selective.contains("- money/rent/deposit [registry] \"Deposit\" — The deposit the landlord holds. | routing: deposit\n"),
-            "an opened branch's child carries its line though the turn never named it: {selective}"
+            selective.contains("- money/rent/deposit [registry] \"Deposit\" — The deposit the landlord holds.\n"),
+            "the branch's child carries its line and no routing, though the turn never named it: {selective}"
         );
-        assert!(selective.contains("- work/studio [registry] \"Studio\"\n"), "an unopened branch is an index line: {selective}");
+        assert!(selective.contains("- work/studio [registry] \"Studio\"\n"), "an untouched branch is an index line: {selective}");
         assert!(!selective.contains("The shared studio lease."), "{selective}");
         let money = &g.distillants["money"];
         assert!(
             selective.contains(&format!("- money [registry] \"{}\" — {}", money.label, money.headline())),
-            "the opened branch's ancestor carries its line: {selective}"
+            "the branch's ancestor carries its line: {selective}"
         );
-        let compact = render_directory_scoped(&g, turn, DirectoryScope::Compact);
+        let compact = render_directory_scoped(&g, DirectoryScope::Compact, &table, turn);
         assert!(compact.contains("- money/rent [registry] \"Rent\" | routing: rent, landlord\n"), "{compact}");
         assert!(!compact.contains("Rent and landlord dealings."), "{compact}");
         assert_eq!(
-            render_directory_scoped(&g, turn, DirectoryScope::Full),
-            render_directory_scoped(&g, "", DirectoryScope::Full),
+            render_directory_scoped(&g, DirectoryScope::Full, &table, turn),
+            render_directory_scoped(&g, DirectoryScope::Full, &table, ""),
             "the full scope ignores the turn"
         );
     }

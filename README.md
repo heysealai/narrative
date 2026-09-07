@@ -169,13 +169,14 @@ harvester's `forgets` op performs when the user asks in conversation.
 
 `replay` drives the harvester (the configured model, or the mock) over
 recorded turns — `{"turns": [{seq, at, at_epoch, user, assistant}, …]}` —
-from the stored graph, under one directory scope: `full` renders every
-distillant with its line and routing (the contract every host renders),
-`compact` drops the lines, `selective` indexes every distillant by id and
-label and expands only the branches the turn opened and their ancestors.
-It writes the graph after every turn and a per-turn report of tokens, ops
-and what was minted. The three scopes measured on a live graph:
-[docs/harvest-scope-replay.md](docs/harvest-scope-replay.md).
+from the stored graph, under one directory scope: `selective` is the
+harvester's own directory (every distillant by id and label; the branches
+the turn is on with line and routing, the branch tips' children with their
+line); `full` renders every distillant with its line and routing, and
+`compact` every distillant with its routing and no line — the two the
+design was measured against. It writes the graph after every turn and a
+per-turn report of tokens, ops, the turn's neighborhood, and what was
+minted: [docs/harvest-scope-replay.md](docs/harvest-scope-replay.md).
 
 ## Module map
 
