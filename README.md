@@ -67,7 +67,8 @@ lines, the runtime compiles them.
 request, opening with the `character` line — the engine's standing estimate of
 who this person is, redistilled as the axes beneath it move. Per turn, the message is lexically matched against the routing
 table; activated distillants project their best leaves (ranked by match
-score, then salience) under a fixed budget. For interrogation beyond what
+score, then by the leaf: the message words it shares, then salience) under a
+fixed budget. For interrogation beyond what
 projection catches, the agent walks the map itself: an `open_memory` tool
 descends the tree BFS-style, and a question can only descend where some line
 on the path advertises the relevant vocabulary — lines are retrieval scent.
@@ -257,8 +258,11 @@ Third pass — consolidation schedules itself and audits its own cache:
   families the line carries (`routing.rs::FACET_FAMILIES`; whole families,
   so a "fear" line routes "afraid" and "dread") and prunes what it dropped.
   Stray model-written facet terms are gated against the line. Projection
-  ranks matches (lexical score, then best-leaf salience) so the 12-leaf
-  budget feeds the strongest matches instead of table order.
+  ranks matches (lexical score, then the best leaf underneath) so the
+  12-leaf budget feeds the strongest matches instead of table order, and
+  ranks each match's leaves by the message words they share before
+  salience, so the leaf the message names survives the per-node cap
+  instead of losing its slot to a more salient sibling.
 - **Stream digests are distilled, not concatenated**: past the soft cap
   (1000) the stream is *due* — the next consolidation step shows the model
   the oldest 150 episodes, full texts intact, and the model returns a real

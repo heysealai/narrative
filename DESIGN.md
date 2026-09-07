@@ -101,8 +101,9 @@ Such rules live in the pinned profile, never in the similarity-gated tail.
    the outgoing user message against a single routing table (spanning both trees) and
    pre-opens the matched categories' leaves into the request *before the model runs*. No
    LLM in the pre-turn hot path. Matches are **ranked** mechanically (lexical score, then
-   best-leaf salience) under a fixed leaf budget, so over-supply costs ordering pressure,
-   never context. **Evaluative-facet vocabulary** (regret, trust, fear…) is *derived*,
+   the best leaf underneath: message words shared, then salience) under a fixed leaf
+   budget, so over-supply costs ordering pressure, never context, and a leaf the message
+   names is never capped out by a more salient sibling. **Evaluative-facet vocabulary** (regret, trust, fear…) is *derived*,
    never model-written: whenever a line is set or rewritten, the runtime mirrors
    the facet families it carries into routing — whole families, so a "fear" line
    routes "afraid" — and prunes the families it dropped. The model's judgment lives in
