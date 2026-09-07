@@ -160,11 +160,22 @@ narrative digest "<text>" [--take n] # apply digest text (n = episodes covered)
 narrative redistill-prompt <distillant>      # that distillant's full contract
 narrative redistill <distillant> @out.json   # apply the redistill response
 narrative open <distillant> | profile | map | stream | stats | forget <id>
+narrative replay turns.json <full|compact|selective> report.json  # harvester over recorded turns
 ```
 
 `forget` takes a leaf, or a distillant with its whole subtree, and the stream
 episodes that were evidence for nothing else — the same removal the
 harvester's `forgets` op performs when the user asks in conversation.
+
+`replay` drives the harvester (the configured model, or the mock) over
+recorded turns — `{"turns": [{seq, at, at_epoch, user, assistant}, …]}` —
+from the stored graph, under one directory scope: `full` renders every
+distillant with its line and routing (the contract every host renders),
+`compact` drops the lines, `selective` indexes every distillant by id and
+label and expands only the branches the turn opened and their ancestors.
+It writes the graph after every turn and a per-turn report of tokens, ops
+and what was minted. The three scopes measured on a live graph:
+[docs/harvest-scope-replay.md](docs/harvest-scope-replay.md).
 
 ## Module map
 
@@ -179,6 +190,7 @@ harvester's `forgets` op performs when the user asks in conversation.
 | `agent.rs` | system prompt assembly, open_memory tool loop |
 | `llm.rs` | Messages API client (raw HTTP) + scripted mock |
 | `sim.rs` | the REPL |
+| `replay.rs` | the harvester over recorded turns under one directory scope, with a per-turn report |
 
 ## The corpus experiments
 
