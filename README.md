@@ -67,7 +67,8 @@ lines, the runtime compiles them.
 request, opening with the `character` line — the engine's standing estimate of
 who this person is, redistilled as the axes beneath it move. Per turn, the message is lexically matched against the routing
 table; activated distillants project their best leaves (ranked by match
-score, then salience) under a fixed budget. For interrogation beyond what
+score, then by the leaf: the message words it shares, then salience) under a
+fixed budget. For interrogation beyond what
 projection catches, the agent walks the map itself: an `open_memory` tool
 descends the tree BFS-style, and a question can only descend where some line
 on the path advertises the relevant vocabulary — lines are retrieval scent.
@@ -160,11 +161,23 @@ narrative digest "<text>" [--take n] # apply digest text (n = episodes covered)
 narrative redistill-prompt <distillant>      # that distillant's full contract
 narrative redistill <distillant> @out.json   # apply the redistill response
 narrative open <distillant> | profile | map | stream | stats | forget <id>
+narrative replay turns.json <full|compact|selective> report.json  # harvester over recorded turns
 ```
 
 `forget` takes a leaf, or a distillant with its whole subtree, and the stream
 episodes that were evidence for nothing else — the same removal the
 harvester's `forgets` op performs when the user asks in conversation.
+
+`replay` drives the harvester (the configured model, or the mock) over
+recorded turns — `{"turns": [{seq, at, at_epoch, user, assistant}, …]}` —
+from the stored graph, under one directory scope: `selective` is the
+harvester's own directory (every distillant by id and label; the branches
+the turn is on with line and routing, the branch tips' children with their
+line); `full` renders every distillant with its line and routing, and
+`compact` every distillant with its routing and no line — the two the
+design was measured against. It writes the graph after every turn and a
+per-turn report of tokens, ops, the turn's neighborhood, and what was
+minted: [docs/harvest-scope-replay.md](docs/harvest-scope-replay.md).
 
 ## Module map
 
@@ -179,6 +192,7 @@ harvester's `forgets` op performs when the user asks in conversation.
 | `agent.rs` | system prompt assembly, open_memory tool loop |
 | `llm.rs` | Messages API client (raw HTTP) + scripted mock |
 | `sim.rs` | the REPL |
+| `replay.rs` | the harvester over recorded turns under one directory scope, with a per-turn report |
 
 ## The corpus experiments
 
@@ -244,8 +258,11 @@ Third pass — consolidation schedules itself and audits its own cache:
   families the line carries (`routing.rs::FACET_FAMILIES`; whole families,
   so a "fear" line routes "afraid" and "dread") and prunes what it dropped.
   Stray model-written facet terms are gated against the line. Projection
-  ranks matches (lexical score, then best-leaf salience) so the 12-leaf
-  budget feeds the strongest matches instead of table order.
+  ranks matches (lexical score, then the best leaf underneath) so the
+  12-leaf budget feeds the strongest matches instead of table order, and
+  ranks each match's leaves by the message words they share before
+  salience, so the leaf the message names survives the per-node cap
+  instead of losing its slot to a more salient sibling.
 - **Stream digests are distilled, not concatenated**: past the soft cap
   (1000) the stream is *due* — the next consolidation step shows the model
   the oldest 150 episodes, full texts intact, and the model returns a real

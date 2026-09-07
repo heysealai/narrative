@@ -101,8 +101,9 @@ Such rules live in the pinned profile, never in the similarity-gated tail.
    the outgoing user message against a single routing table (spanning both trees) and
    pre-opens the matched categories' leaves into the request *before the model runs*. No
    LLM in the pre-turn hot path. Matches are **ranked** mechanically (lexical score, then
-   best-leaf salience) under a fixed leaf budget, so over-supply costs ordering pressure,
-   never context. **Evaluative-facet vocabulary** (regret, trust, fear…) is *derived*,
+   the best leaf underneath: message words shared, then salience) under a fixed leaf
+   budget, so over-supply costs ordering pressure, never context, and a leaf the message
+   names is never capped out by a more salient sibling. **Evaluative-facet vocabulary** (regret, trust, fear…) is *derived*,
    never model-written: whenever a line is set or rewritten, the runtime mirrors
    the facet families it carries into routing — whole families, so a "fear" line
    routes "afraid" — and prunes the families it dropped. The model's judgment lives in
@@ -128,9 +129,15 @@ There is no explicit `remember` tool taxing the live turn. Writes are ambient:
 
 - **Post-turn harvester**: an off-context model call reads finished turns and extracts
   episodes, state changes, and disposition nudges; classifies species; links to categories
-  with the **full directory inline** (labels + aliases + anchors — fine to a few hundred
-  distillants). New-node creation is **harvester judgment**: durable participant in the
-  person's life → node; incidental mention → string tag only.
+  with the directory in view **leaf to root**: every distillant by id and label, and the
+  neighborhood the turn touches expanded — the routing hits with their path to the root
+  (line and routing: where the harvester files, and whose routing it extends) and each
+  branch tip's children with their lines (the siblings a new fact lands among; a sibling
+  named only by its label is a twin waiting to happen). A hit that another hit sits under
+  is context on the way up, not a tip. Input scales with the turn's neighborhood, not with
+  the memory; the scopes it was measured against are in `docs/harvest-scope-replay.md`.
+  New-node creation is **harvester judgment**: durable participant in the person's life →
+  node; incidental mention → string tag only.
 - **Eviction-coupled distillation**: when the host's context approaches its eviction
   watermark, harvest the chunk about to phase out. Memory is, definitionally, **what
   survives forgetting**. (Hippocampus → cortex consolidation, as systems design.)

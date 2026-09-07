@@ -7,11 +7,12 @@
 //! Plus the registry *skeleton* (labels + lines, no leaf bodies), which
 //! is the in-context map the model uses for `open_memory` BFS descent.
 
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use crate::belief;
-use crate::model::{age_str, Graph, Id, Species, Tree};
-use crate::routing::RoutingTable;
+use crate::model::{age_str, Graph, Id, Leaf, Species, Tree};
+use crate::routing::{normalize, RoutingTable};
 
 pub const PER_MIDPOINT_CAP: usize = 5;
 pub const TOTAL_LEAF_CAP: usize = 12;
@@ -56,6 +57,75 @@ impl Projection {
     }
 }
 
+/// The distinct words of the message, normalized the way the routing table
+/// normalizes its terms, so a leaf is compared on the same footing as the
+/// distillant that routed it.
+struct MessageWords(BTreeSet<String>);
+
+impl MessageWords {
+    fn of(text: &str) -> Self {
+        MessageWords(normalize(text).split_whitespace().map(str::to_string).collect())
+    }
+
+    fn shared_with(&self, leaf: &Leaf) -> usize {
+        normalize(&leaf.text)
+            .split_whitespace()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .filter(|word| self.0.contains(*word))
+            .count()
+    }
+}
+
+/// How well one leaf answers the message: the message words its text
+/// carries, then its salience. Every leaf under a distillant is about the
+/// distillant, but only some are about what the message asks; ordered by
+/// salience alone, the leaf the message names can fall outside the cap.
+#[derive(Clone, Copy)]
+struct LeafRank {
+    shared_words: usize,
+    salience: f32,
+}
+
+impl LeafRank {
+    const NONE: LeafRank = LeafRank { shared_words: 0, salience: 0.0 };
+
+    fn of(leaf: &Leaf, words: &MessageWords, now: u64) -> Self {
+        LeafRank { shared_words: words.shared_with(leaf), salience: belief::score(leaf, now) }
+    }
+
+    /// Descending: more shared words first, then higher salience.
+    fn order(a: &Self, b: &Self) -> std::cmp::Ordering {
+        b.shared_words
+            .cmp(&a.shared_words)
+            .then_with(|| b.salience.partial_cmp(&a.salience).unwrap_or(std::cmp::Ordering::Equal))
+    }
+}
+
+/// A distillant the message routed to, with its leaves already in the
+/// order the message wants them (best answer first).
+struct Activated<'g> {
+    distillant_id: Id,
+    lexical_score: u32,
+    leaves: Vec<(&'g Leaf, LeafRank)>,
+}
+
+impl<'g> Activated<'g> {
+    fn of(graph: &'g Graph, distillant_id: Id, lexical_score: u32, words: &MessageWords, now: u64) -> Self {
+        let mut leaves: Vec<(&Leaf, LeafRank)> = graph
+            .leaves_under(&distillant_id)
+            .into_iter()
+            .map(|leaf| (leaf, LeafRank::of(leaf, words, now)))
+            .collect();
+        leaves.sort_by(|(_, a), (_, b)| LeafRank::order(a, b));
+        Activated { distillant_id, lexical_score, leaves }
+    }
+
+    fn best_leaf(&self) -> LeafRank {
+        self.leaves.first().map(|(_, rank)| *rank).unwrap_or(LeafRank::NONE)
+    }
+}
+
 /// Match the outgoing message against the routing table and pre-open the
 /// activated distillants' best leaves. Registry only — the profile is pinned.
 /// Episodes route too, via their tags: the most recent few tagged with any
@@ -74,59 +144,64 @@ pub fn project_with_caps(
     total_cap: usize,
 ) -> Projection {
     let table = RoutingTable::build(graph);
+    project_with_table(graph, &table, text, now, per_distillant, total_cap)
+}
+
+/// The projection over a routing table the caller already built — the
+/// harvester matches the same turn against the same table twice (directory
+/// and comparanda) and builds it once.
+pub fn project_with_table(
+    graph: &Graph,
+    table: &RoutingTable,
+    text: &str,
+    now: u64,
+    per_distillant: usize,
+    total_cap: usize,
+) -> Projection {
     // Rank matches: lexical score first, then the best leaf underneath
-    // (relevance × recency × importance, mechanically). The leaf budget
-    // below goes to the best-ranked matches — table order was alphabetical,
-    // and an early weak match could starve the actual answer (the budget-
-    // crowding finding of docs/facet-routing-discovery.md).
-    let mut matched = table.matches_scored(text);
-    let best_leaf = |mid: &str| {
-        graph
-            .leaves_under(mid)
-            .iter()
-            .map(|l| belief::score(l, now))
-            .fold(0.0f32, f32::max)
-    };
-    matched.sort_by(|(a_mid, a_score), (b_mid, b_score)| {
-        b_score.cmp(a_score).then_with(|| {
-            best_leaf(b_mid)
-                .partial_cmp(&best_leaf(a_mid))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+    // (message words shared, then salience). The leaf budget below goes to
+    // the best-ranked matches — table order was alphabetical, and an early
+    // weak match could starve the actual answer (the budget-crowding
+    // finding of docs/facet-routing-discovery.md).
+    let words = MessageWords::of(text);
+    let mut activated: Vec<Activated> = table
+        .matches_scored(text)
+        .into_iter()
+        .map(|(mid, score)| Activated::of(graph, mid, score, &words, now))
+        .collect();
+    activated.sort_by(|a, b| {
+        b.lexical_score
+            .cmp(&a.lexical_score)
+            .then_with(|| LeafRank::order(&a.best_leaf(), &b.best_leaf()))
     });
-    let matched: Vec<Id> = matched.into_iter().map(|(mid, _)| mid).collect();
     let mut total = 0usize;
     let mut opened = Vec::new();
-    for mid in &matched {
-        let Some(m) = graph.distillants.get(mid) else { continue };
+    for a in &activated {
+        let Some(m) = graph.distillants.get(&a.distillant_id) else { continue };
         if m.tree == Tree::Profile {
             continue; // pinned tier, already inline
         }
-        let mut leaves = graph.leaves_under(mid);
-        leaves.sort_by(|a, b| {
-            belief::score(b, now)
-                .partial_cmp(&belief::score(a, now))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        let take = leaves
+        let take = a
+            .leaves
             .iter()
             .take(per_distillant.min(total_cap.saturating_sub(total)))
-            .map(|l| l.id.clone())
+            .map(|(leaf, _)| leaf.id.clone())
             .collect::<Vec<_>>();
         if take.is_empty() {
             continue;
         }
         total += take.len();
-        opened.push(OpenedDistillant { distillant_id: mid.clone(), leaf_ids: take });
+        opened.push(OpenedDistillant { distillant_id: a.distillant_id.clone(), leaf_ids: take });
         if total >= total_cap {
             break;
         }
     }
+    let tag_is_activated = |tag: &Id| activated.iter().any(|a| &a.distillant_id == tag);
     let mut episodes: Vec<Id> = graph
         .episodes
         .iter()
         .rev()
-        .filter(|e| e.tags.iter().any(|t| matched.contains(t)))
+        .filter(|e| e.tags.iter().any(tag_is_activated))
         .take(EPISODE_RECALL_CAP)
         .map(|e| e.id.clone())
         .collect();
@@ -364,6 +439,58 @@ mod tests {
             .expect("rent distillant opened");
         assert_eq!(rent.leaf_ids.len(), PER_MIDPOINT_CAP);
         assert_eq!(rent.leaf_ids[0], "rent-fact-7", "highest importance first");
+    }
+
+    #[test]
+    fn the_leaf_the_message_names_survives_the_cap() {
+        let mut g = fixture();
+        let mut l = Leaf::new(
+            "rent-deposit".into(),
+            Species::State,
+            "The deposit came back in full.".into(),
+            vec!["money/rent".into()],
+            1_000,
+        );
+        l.salience.importance = 0.05; // the least salient leaf under rent
+        g.leaves.insert(l.id.clone(), l);
+        let p = project(&g, "did my rent deposit come back?", 2_000);
+        let rent = p.opened.iter().find(|o| o.distillant_id == "money/rent").unwrap();
+        assert_eq!(rent.leaf_ids[0], "rent-deposit", "the message's own words outrank salience");
+        assert_eq!(rent.leaf_ids.len(), PER_MIDPOINT_CAP, "the cap still holds");
+        assert_eq!(rent.leaf_ids[1], "rent-fact-7", "salience orders the leaves the message names equally");
+    }
+
+    #[test]
+    fn a_leaf_naming_the_message_lifts_its_distillant_on_equal_score() {
+        let mut g = Graph::seed();
+        for (mid, text) in [("life/aaa", "fact"), ("life/zzz", "the roof leaks")] {
+            g.distillants.insert(
+                mid.into(),
+                Distillant {
+                    id: mid.into(),
+                    tree: Tree::Registry,
+                    label: mid.into(),
+                    line: "x".into(),
+                    routing: vec!["home".into()],
+                    parents: vec!["life".into()],
+                    misc_count: 0,
+                    consolidated_at: 0,
+                    line_changed_at: 0,
+                    forgotten_at: 0,
+                },
+            );
+            let mut l = Leaf::new(
+                format!("{}-leaf", mid.replace('/', "-")),
+                Species::State,
+                text.into(),
+                vec![mid.into()],
+                1_000,
+            );
+            l.salience.importance = 0.5;
+            g.leaves.insert(l.id.clone(), l);
+        }
+        let p = project(&g, "home roof again", 2_000);
+        assert_eq!(p.opened[0].distillant_id, "life/zzz", "equal lexical score, equal salience: the shared word decides");
     }
 
     #[test]

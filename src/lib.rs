@@ -5,6 +5,7 @@ pub mod harvest;
 pub mod llm;
 pub mod model;
 pub mod projection;
+pub mod replay;
 pub mod routing;
 pub mod sim;
 pub mod store;
