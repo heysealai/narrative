@@ -55,7 +55,7 @@ personal signature lives one or two levels down. So:
 - The tree grows recursively but stays shallow (~3 levels) because distillation pressure is
   constitutive, not cosmetic — see "tree health = retrieval health" below.
 
-## The three stores
+## The three stores, and the rules beside them
 
 Dispositions and states want different shapes, and forcing one taxonomy over both produces
 heterogeneous children ("money" parenting both `rent: $2,200` and `tends to overspend
@@ -66,6 +66,14 @@ late-month`). Split by species, each in its native topology:
 | **Stream** | time-ordered log | episodes | immutable, accumulate, fade/compress |
 | **Registry** | noun-shaped tree (people, accounts, obligations, work...) | state facts | current value + supersession history |
 | **Profile** | one apex — the character estimate — over a trait-shaped shallow tree (spend discipline, risk appetite, communication style...) | dispositions | scored axes that drift, with trajectories; the apex line is distilled from the axis lines |
+| **Rules** | flat list, under no tree | rules | the user's standing instructions in their own words; binding on first occurrence, superseded or retracted only by a later instruction |
+
+A rule is what the user *said*, not what the engine inferred: "keep replies to five
+lines", "ask before any spend over $20". It carries no belief, no salience, no parent —
+nothing inferred moves one. Routing, projection, and consolidation all walk by parent,
+so a rule is invisible to every mechanism that weighs evidence, by construction rather
+than by exemption. The one thing that changes a rule is the user changing it: a later
+instruction supersedes its wording (the old words stay as history) or retracts it.
 
 The stream is the **shared evidence pool**: one episode ("paid rent late in May") supports a
 registry history and nudges a profile axis. Both trees hold pointers into it; episodes are
@@ -92,7 +100,9 @@ choices landing on one line, which is the design telling you it's right.
 
 Load-bearing memories (rules: "never auto-approve over $500") must **fire, not surface** —
 probabilistic recall of a rule is worse than no rule, because trust is built on it firing.
-Such rules live in the pinned profile, never in the similarity-gated tail.
+Such rules live in the rules list, pinned above the profile and rendered without ages so
+the block is byte-stable between changes; they never sit in the similarity-gated tail. A
+correction of register or length the user makes once is a rule from that moment on.
 
 ## Retrieval — two motions over one structure
 
@@ -154,6 +164,15 @@ There is no explicit `remember` tool taxing the live turn. Writes are ambient:
   belief strength then never accumulates (every axis at one observation). Every
   disposition rides in every harvest prompt, exactly as the profile rides pinned in
   every recall; the harvester nudges by id.
+- **Rules are harvested ambiently, and the rules are pinned for the harvester too.** A
+  rule-shaped utterance ("from now on, five lines") becomes a `rules` op in the user's
+  own words; every standing rule rides in every harvest prompt by id, so an instruction
+  that changes one supersedes or retracts it by id rather than minting a second. A host
+  that acknowledged an instruction before memory caught up can hand it to the harvester
+  as an *instruction to resolve*: each is answered by id with exactly one rules op, or
+  none, and the runtime reports every instruction's resolution — kept, superseded,
+  retracted, duplicate, or not a rule — so the host can tell the user what memory did
+  with it.
 
 ### Contradiction cross-matching happens at write, via projection pointed backwards
 
@@ -178,6 +197,9 @@ moving belief — but fork by species, or it goes wrong:
   superseded. Contradiction → supersession with timestamps; the old value becomes an
   episode ("rent was $2,200 until June 2026"). The history of change is some of the most
   informative content in the graph — never delete it.
+- **Rules bind.** A rule has no belief to move: it is in force from the moment it is
+  given until the user changes it. Its wording history is kept like a state's, but no
+  count of observations ever weakens or strengthens one.
 
 **The model classifies; the runtime does the arithmetic.** If the LLM hand-assigns
 "belief: 0.7", the number is vibes — the RAG-confidence disease in a new costume. Instead
@@ -254,15 +276,16 @@ read/write budget asymmetry:
 
 ```
 Leaf {
-  id, species: episode | state | disposition,
-  text,                      // small, atomic
-  parents: [distillant ids],   // DAG, multi-parent
-  salience: { importance, last_retrieved, retrieval_count },
-  belief:   { strength, support_count, contradict_count, last_event,
-              last_against },  // derived, not assigned; last_against = when an event
-                               // last moved against the text (drift reads this)
-  // states:       current value + supersession chain (old values -> episodes)
-  // dispositions: axis position + trajectory of nudges
+  id,
+  text,                      // small, atomic; a rule: the user's own words
+  parents: [distillant ids],   // DAG, multi-parent; a rule: always empty
+  kind: species-tagged —
+    state:       { belief, salience, history: supersession chain }
+    disposition: { belief, salience, axis position, trajectory of nudges }
+    rule:        { history: supersession chain, instruction: host id it answered }
+  // belief: { support_count, contradict_count, last_event, last_against } — derived,
+  //   not assigned; last_against = when an event last moved against the text (drift
+  //   reads this). A rule carries no belief and no salience.
   evidence: [stream ids],
   created_at, updated_at,
 }
@@ -295,7 +318,8 @@ machinery (background subagents). Any host needs equivalents:
 1. Finished-turn transcripts delivered to the harvester.
 2. An eviction signal + the about-to-evict chunk (for distill-before-forget).
 3. A pre-send hook on outgoing messages (projection match + leaf injection).
-4. An inline slot for the pinned profile (cache-friendly) and a per-turn slot for
+4. An inline slot for the pinned rules and profile (cache-friendly; the rules render
+   with no ages, so the block only moves when a rule does) and a per-turn slot for
    projected leaves (cache-safe).
 5. An LLM channel for harvester/consolidation calls, off the interactive turn.
 6. An `open(path)` tool exposed to the main model for BFS descent.

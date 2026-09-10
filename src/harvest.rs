@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 use crate::belief;
 use crate::llm::{ChatRequest, Llm};
-use crate::model::{Graph, Leaf, Distillant, Species, Tree, PROFILE_APEX};
+use crate::model::{Belief, Distillant, Graph, Leaf, LeafKind, Nudge, Salience, Species, Supersession, Tree, PROFILE_APEX};
 use crate::projection;
 use crate::routing;
 
@@ -24,6 +24,33 @@ pub enum Relation {
     Supports,
     Contradicts,
     Supersedes,
+}
+
+/// How a rules entry relates to the standing rules: a new instruction, a
+/// restatement of one, a change of one's wording, or its withdrawal.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleRelation {
+    Novel,
+    Duplicate,
+    Supersedes,
+    Retract,
+}
+
+/// One rules entry: the user's instruction in their own words. `target` is
+/// the standing rule this changes ("" when novel); `instruction` is the
+/// host's instruction id this answers ("" when the rule came from ordinary
+/// speech).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RuleOp {
+    pub id: String,
+    pub text: String,
+    pub relation: RuleRelation,
+    pub target: String,
+    #[serde(default)]
+    pub instruction: String,
+    #[serde(default)]
+    pub occurred_at: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -55,6 +82,9 @@ pub enum Op {
         note: String,
         importance: f32,
     },
+    /// Rules: a standing instruction — binding on first occurrence, in the
+    /// user's own words; a later instruction supersedes or retracts it.
+    Rule(RuleOp),
     /// Create or refresh a distillant (the line layer).
     Distillant {
         id: String,
@@ -107,6 +137,7 @@ struct HarvestOut {
     episodes: Vec<EpisodeOp>,
     states: Vec<StateOp>,
     dispositions: Vec<DispositionOp>,
+    rules: Vec<RuleOp>,
     reinforces: Vec<ReinforceOp>,
     aliases: Vec<AliasOp>,
     distills: Vec<DistillOp>,
@@ -253,6 +284,9 @@ impl HarvestOut {
                 importance: d.importance,
             });
         }
+        for r in self.rules {
+            ops.push(Op::Rule(r));
+        }
         for r in self.reinforces {
             ops.push(Op::Reinforce { target: r.target });
         }
@@ -291,6 +325,7 @@ impl HarvestOut {
 
 pub fn ops_schema() -> Value {
     let relation = json!({"type": "string", "enum": ["novel", "duplicate", "supports", "contradicts", "supersedes"]});
+    let rule_relation = json!({"type": "string", "enum": ["novel", "duplicate", "supersedes", "retract"]});
     let tree = json!({"type": "string", "enum": ["registry", "profile"]});
     let strings = json!({"type": "array", "items": {"type": "string"}});
     json!({
@@ -360,6 +395,23 @@ pub fn ops_schema() -> Value {
                         "importance": {"type": "number"}
                     },
                     "required": ["id", "distillants", "text", "dir", "note", "importance"],
+                    "additionalProperties": false
+                }
+            },
+            "rules": {
+                "description": "Standing instructions: what the user asked for that should hold on every future turn, in their own words. Binding on first occurrence; never weighed or merged. An instruction that changes a standing rule shown to you supersedes or retracts it by id — never adds a second.",
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "description": "kebab-case slug, stable handle; the existing rule's id when relation is supersedes, duplicate or retract"},
+                        "text": {"type": "string", "description": "the instruction in the user's own words, trimmed to the instruction, present tense; empty for retract"},
+                        "relation": rule_relation,
+                        "target": {"type": "string", "description": "existing rule id this relates to; empty string when novel"},
+                        "instruction": {"type": "string", "description": "the id from the 'Instructions to resolve' section this entry answers; empty string when the rule came from ordinary speech"},
+                        "occurred_at": {"type": ["integer", "null"], "description": "unix seconds when the instruction was given, when the turn says so; null = now"}
+                    },
+                    "required": ["id", "text", "relation", "target", "instruction", "occurred_at"],
                     "additionalProperties": false
                 }
             },
@@ -493,16 +545,17 @@ pub fn ops_schema() -> Value {
                 }
             }
         },
-        "required": ["distillants", "episodes", "states", "dispositions", "reinforces", "aliases", "distills", "moves", "reparents", "merge_leaves", "merge_distillants", "forgets", "manual_upserts", "manual_retires"],
+        "required": ["distillants", "episodes", "states", "dispositions", "rules", "reinforces", "aliases", "distills", "moves", "reparents", "merge_leaves", "merge_distillants", "forgets", "manual_upserts", "manual_retires"],
         "additionalProperties": false
     })
 }
 
-const HARVESTER_SYSTEM: &str = r#"You are the memory architect for a personal assistant. After each conversation turn you distill what is durable into a structured memory with three stores:
+const HARVESTER_SYSTEM: &str = r#"You are the memory architect for a personal assistant. After each conversation turn you distill what is durable into a structured memory with three stores and a list of standing rules:
 
 - STREAM (episodes): things that happened — time-anchored, immutable. "Paid rent late in May."
 - REGISTRY (states): noun-shaped facts with a current value — "rent is $2,200/mo", "sister = Lisa". States SWITCH: when a value changes, it is superseded, never blended.
 - PROFILE (dispositions): trait axes that DRIFT — "tends to overspend late-month". One observation nudges an axis; it never flips it.
+- RULES: the user's standing instructions in their own words — "keep replies to five lines", "ask before any spend over $20". A rule BINDS from the moment it is given: it is never weighed, nudged, or merged; only a later instruction supersedes or retracts it.
 
 Rules:
 1. Distill only what is durable. Chitchat, pleasantries, and one-off questions leave no trace. All sections empty is a perfectly good harvest.
@@ -511,7 +564,7 @@ Rules:
 4. Aliases are how future recall works: record the ways the user refers to a THING ("my sister", "lisa.eth", "the landlord") as routing vocabulary — on the state's aliases field or in the aliases section. Routing is a referring-expression index, not a word list: never lift words out of the fact itself, episode detail (numbers, one-off phrasings), or generic phrases a message about anything could contain — every stray term routes unrelated messages here. Single-user memory: possessives like "my sister" are stable aliases. Wallet addresses, handles and emails are exact anchors — always record them. Matching is exact-token, no stemming: include the inflected forms a future message would actually contain ("payment" AND "payments"). Evaluative vocabulary (trust, regret, fear, pride, conflict) is derived from lines automatically — spend aliases and routing on referring expressions, never on facet words.
 5. Cross-match against the comparanda you are given. Classify each state: novel (nothing like it exists), duplicate (already stored, restated), supports (new evidence for an existing leaf — set target), contradicts (casts doubt, no clear replacement — set target), supersedes (clear new value replacing an old one — set target). Never store the same knowledge twice as novel. When the turn merely adds evidence for an existing leaf and there is nothing to restate, emit a reinforces entry instead of a supports state.
 6. You classify; the runtime does the arithmetic. Never hedge text with probabilities.
-7. importance: 0.9+ money rules, safety-critical facts, explicit "remember this"; ~0.5 ordinary facts; ~0.2 minor color. High-importance exceptions ("got scammed by X once") deserve their own leaf — never average them away.
+7. importance: 0.9+ safety-critical facts, money facts, explicit "remember this"; ~0.5 ordinary facts; ~0.2 minor color. High-importance exceptions ("got scammed by X once") deserve their own leaf — never average them away.
 8. Dispositions: the leaf text states the +1 pole of the axis. dir=+1 pushes toward the statement, dir=-1 against it. The whole profile is shown to you every time (pinned): an observation about a tendency already tracked is a nudge on that existing id — a new leaf only for a genuinely new axis. Keep profile axes few and broad. The profile's root, `character`, is the whole-person estimate consolidation distills from the axes: never hang a leaf there — a disposition always belongs to an axis under it.
 9. Episodes: log events worth remembering as events (payments, decisions, incidents, plans made). Tag with involved distillant ids. The leaf ops you emit alongside will be wired to them as evidence automatically.
 10. Use distill to refresh a distillant's one-line summary when what you learned makes the old line stale.
@@ -519,7 +572,8 @@ Rules:
 12. Structure follows understanding: when you create a finer distillant that better fits leaves you can see in the comparanda, move those leaves under it with moves entries. Merge ops (merge_leaves, merge_distillants) repair duplicates discovered after the fact — two leaves or distillants that turned out to be the same thing. Use structural ops sparingly in harvest; consolidation does the heavy restructuring.
 13. Forgetting is the user's call and it is final: when the user asks to forget, delete, or stop remembering something, emit a forgets entry for every leaf or distillant that holds it (find them in the comparanda and the directory) and leave no trace of the content anywhere else in this harvest — no episode recording the request, no state restating it. When nothing stored matches, the harvest simply carries nothing about it.
 14. Lines are retrieval scent: a later question can only descend to a leaf if some line on its path advertises the relevant vocabulary. When a leaf carries evaluative weight — trust, regret, fear, pride, conflict — say so in the line alongside the topic ("sworn companion, sold to the captain — parting is a standing regret"), not just the noun-shape ("proves loyal"). A regret no line mentions is a regret recall cannot find; one the line carries routes automatically — the line is the only place it needs to be. Lines are plain prose about the person — never machinery words ("facet", "routing", "distillant", "leaf"), and never this rule's example wording restated as fact: examples illustrate shape, not content.
-15. The input may carry server-authored worker run digest blocks — operational evidence that background tool calls failed, each line naming a tool, sometimes a service, and the error. Digest content is machinery, not the user's life: it never becomes an episode, state, disposition, or distillant, and its vocabulary never enters routing. Its one product is the FIELD MANUAL: when the evidence teaches something durable about operating a tool or service, emit a manual_upserts entry keyed by that tool and service — the lesson states the wall and the working alternative in plain operating prose. The existing field-manual entries are shown to you; an upsert replaces its entry, so refine with the new evidence rather than restating. When the evidence shows a recorded lesson no longer holds, retire it with manual_retires. A transient one-off failure with nothing durable to teach emits nothing at all."#;
+15. The input may carry server-authored worker run digest blocks — operational evidence that background tool calls failed, each line naming a tool, sometimes a service, and the error. Digest content is machinery, not the user's life: it never becomes an episode, state, disposition, or distillant, and its vocabulary never enters routing. Its one product is the FIELD MANUAL: when the evidence teaches something durable about operating a tool or service, emit a manual_upserts entry keyed by that tool and service — the lesson states the wall and the working alternative in plain operating prose. The existing field-manual entries are shown to you; an upsert replaces its entry, so refine with the new evidence rather than restating. When the evidence shows a recorded lesson no longer holds, retire it with manual_retires. A transient one-off failure with nothing durable to teach emits nothing at all.
+16. Rules: a standing instruction is something the user asked for that should hold on every future turn — how to talk to them (register, length, tone, language), how to operate (ask before X, always do Y after Z), a procedure with a trigger, or money judgment that is not a number. A request for this turn only, a fact, a date, a preference you inferred, and a policy number are not rules. The rule's text is the user's own words from the turn, trimmed to the instruction, present tense — never your paraphrase when their words are available. The standing rules are shown to you every time: an instruction that changes one of them supersedes it by id (new wording, same rule) or retracts it (the user withdrew it) — never a second rule saying the same thing. When the input carries an "Instructions to resolve" section, answer every listed id: exactly one rules entry carrying that instruction id (novel, supersedes, retract, or duplicate of a rule already in force), and no state, disposition, or episode for the same words; an instruction that is not a standing instruction gets no entry at all — the runtime reports it as not kept. Instructions resolve in the order listed. Rules carry no importance, no distillant, and no evidence weighing."#;
 
 /// What the harvester sees of the distillant layer. Every scope shows every
 /// distillant BY ID, so a fact can always be filed under an existing node;
@@ -635,6 +689,32 @@ fn render_directory_scoped(
 const HARVEST_PER_MIDPOINT_CAP: usize = 12;
 const HARVEST_TOTAL_CAP: usize = 48;
 
+/// The standing rules, every one by id, for the harvester to supersede or
+/// retract by id rather than mint a second rule saying the same thing —
+/// pinned for the harvester as the profile is.
+fn render_pinned_rules(graph: &Graph) -> String {
+    let mut rules = graph.rules();
+    rules.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut out = String::new();
+    for l in rules {
+        let _ = writeln!(out, "- [{}] {}", l.id, l.text);
+    }
+    if out.is_empty() {
+        out.push_str("(none)\n");
+    }
+    out
+}
+
+/// The host's instructions awaiting memory, each by id with the user's
+/// words and the assistant's reading of them.
+fn render_instructions(instructions: &[Instruction]) -> String {
+    let mut out = String::new();
+    for i in instructions {
+        let _ = writeln!(out, "- [{}] user said: \"{}\" — read as: {}", i.id, i.utterance.trim(), i.paraphrase.trim());
+    }
+    out
+}
+
 fn render_comparanda(graph: &Graph, table: &routing::RoutingTable, turn_text: &str, now: u64) -> String {
     let p = projection::project_with_table(
         graph,
@@ -653,14 +733,11 @@ fn render_comparanda(graph: &Graph, table: &routing::RoutingTable, turn_text: &s
             }
             seen.push(id);
             if let Some(l) = graph.leaves.get(id) {
-                let sp = match l.species {
-                    Species::State => "state",
-                    Species::Disposition => "disposition",
-                };
                 let _ = writeln!(
                     out,
-                    "- [{}] ({sp}, under {}) {}",
+                    "- [{}] ({}, under {}) {}",
                     l.id,
+                    l.species().name(),
                     l.parents.join("+"),
                     l.text
                 );
@@ -687,7 +764,14 @@ fn render_pinned_profile(graph: &Graph) -> String {
         let mut leaves = graph.leaves_under(&id);
         leaves.sort_by(|a, b| a.id.cmp(&b.id));
         for l in leaves {
-            let _ = writeln!(out, "- [{}] (under {}) {} (axis {:+.2}, {} observations)", l.id, id, l.text, l.axis, l.nudges.len());
+            match &l.kind {
+                LeafKind::Disposition(d) => {
+                    let _ = writeln!(out, "- [{}] (under {}) {} (axis {:+.2}, {} observations)", l.id, id, l.text, d.axis, d.nudges.len());
+                }
+                LeafKind::State(_) | LeafKind::Rule(_) => {
+                    let _ = writeln!(out, "- [{}] (under {}) {}", l.id, id, l.text);
+                }
+            }
         }
         let mut children = graph.child_distillants(&id);
         children.sort_by(|a, b| b.id.cmp(&a.id));
@@ -699,19 +783,39 @@ fn render_pinned_profile(graph: &Graph) -> String {
     out
 }
 
-/// `field_manual` is the HOST-rendered list of existing field-manual
-/// entries (one line per entry, tool + service + lesson) — the upsert
-/// contract's compare point, exactly as the comparanda are for states.
-/// Empty when the host stores none or the input carries no digest block;
-/// the section is omitted then, keeping digest-free harvests byte-stable.
-pub fn build_user_message(
-    graph: &Graph,
-    user_text: &str,
-    assistant_text: &str,
-    field_manual: &str,
-    now: u64,
-    scope: DirectoryScope,
-) -> String {
+/// A rule-shaped ask the assistant acknowledged that memory has not yet
+/// resolved: the host's id for it, the user's words, the assistant's reading.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Instruction {
+    pub id: String,
+    pub utterance: String,
+    pub paraphrase: String,
+}
+
+/// What the harvester reads of one finished turn. `field_manual` is the
+/// HOST-rendered list of existing field-manual entries (one line per
+/// entry, tool + service + lesson) — the upsert contract's compare point,
+/// exactly as the comparanda are for states; empty when the host stores
+/// none or the input carries no digest block. `instructions` are the
+/// host's instructions awaiting memory, in the order given. Each empty
+/// input omits its section, keeping plain harvests byte-stable.
+#[derive(Clone, Debug)]
+pub struct HarvestInput<'a> {
+    pub user_text: &'a str,
+    pub assistant_text: &'a str,
+    pub field_manual: &'a str,
+    pub instructions: &'a [Instruction],
+}
+
+impl<'a> HarvestInput<'a> {
+    /// The bare turn: no field manual, nothing awaiting memory.
+    pub fn turn(user_text: &'a str, assistant_text: &'a str) -> Self {
+        HarvestInput { user_text, assistant_text, field_manual: "", instructions: &[] }
+    }
+}
+
+pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: DirectoryScope) -> String {
+    let HarvestInput { user_text, assistant_text, field_manual, instructions } = *input;
     let turn_text = format!("{user_text} {assistant_text}");
     let table = routing::RoutingTable::build(graph);
     let manual_section = match field_manual.trim().is_empty() {
@@ -719,6 +823,13 @@ pub fn build_user_message(
         false => format!(
             "# Field manual (existing entries — a manual_upserts entry REPLACES its tool+service row)\n{}\n",
             field_manual.trim()
+        ),
+    };
+    let instructions_section = match instructions.is_empty() {
+        true => String::new(),
+        false => format!(
+            "# Instructions to resolve (rule-shaped asks the assistant acknowledged; answer each by id with exactly one rules entry, or none when it is not a standing instruction)\n{}\n",
+            render_instructions(instructions)
         ),
     };
     let directory_heading = match scope {
@@ -729,11 +840,14 @@ pub fn build_user_message(
     };
     format!(
         "{directory_heading}\n{}\n\
+         # Standing rules (pinned — every instruction already in force, by id; an instruction that changes one supersedes or retracts it by id, never adds a second)\n{}\n\
          # Profile axes (pinned — every disposition already tracked; nudge one of these by id, never mint a near-duplicate)\n{}\n\
          # Existing leaves related to this turn (comparanda — cross-match against these)\n{}\n\
          {manual_section}\
+         {instructions_section}\
          # Turn to harvest\nUser: {}\nAssistant: {}",
         render_directory_scoped(graph, scope, &table, &turn_text),
+        render_pinned_rules(graph),
         render_pinned_profile(graph),
         render_comparanda(graph, &table, &turn_text, now),
         user_text,
@@ -745,30 +859,17 @@ pub fn build_user_message(
 /// rendered input — self-contained, like `render_digest_prompt` and
 /// `render_redistill_prompt`. A driver holding only this render can play
 /// the harvester role. The directory is the design's, [`DirectoryScope::Selective`].
-pub fn render_harvest_prompt(
-    graph: &Graph,
-    user_text: &str,
-    assistant_text: &str,
-    field_manual: &str,
-    now: u64,
-) -> String {
-    render_harvest_prompt_scoped(graph, user_text, assistant_text, field_manual, now, DirectoryScope::Selective)
+pub fn render_harvest_prompt(graph: &Graph, input: &HarvestInput, now: u64) -> String {
+    render_harvest_prompt_scoped(graph, input, now, DirectoryScope::Selective)
 }
 
 /// The keyless prompt under a chosen [`DirectoryScope`], for the replay
 /// that compares them.
-pub fn render_harvest_prompt_scoped(
-    graph: &Graph,
-    user_text: &str,
-    assistant_text: &str,
-    field_manual: &str,
-    now: u64,
-    scope: DirectoryScope,
-) -> String {
+pub fn render_harvest_prompt_scoped(graph: &Graph, input: &HarvestInput, now: u64, scope: DirectoryScope) -> String {
     format!(
         "# System\n{HARVESTER_SYSTEM}\n\n# Output schema (reply with one JSON object matching it)\n{}\n\n# Input\n{}",
         serde_json::to_string_pretty(&ops_schema()).expect("static schema serializes"),
-        build_user_message(graph, user_text, assistant_text, field_manual, now, scope)
+        build_user_message(graph, input, now, scope)
     )
 }
 
@@ -779,18 +880,12 @@ pub fn parse_ops(text: &str) -> Result<Vec<Op>> {
 }
 
 /// Run the harvester over one finished turn and apply what it found.
-pub fn run(
-    llm: &dyn Llm,
-    graph: &mut Graph,
-    user_text: &str,
-    assistant_text: &str,
-    now: u64,
-) -> Result<Vec<String>> {
+pub fn run(llm: &dyn Llm, graph: &mut Graph, input: &HarvestInput, now: u64) -> Result<Applied> {
     let req = ChatRequest {
         system: HARVESTER_SYSTEM.to_string(),
         messages: vec![json!({
             "role": "user",
-            "content": build_user_message(graph, user_text, assistant_text, "", now, DirectoryScope::Selective)
+            "content": build_user_message(graph, input, now, DirectoryScope::Selective)
         })],
         tools: vec![],
         output_schema: Some(ops_schema()),
@@ -911,8 +1006,63 @@ pub(crate) fn sync_facet_routing(graph: &mut Graph, distillant_id: &str, traces:
     }
 }
 
-pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
+/// What one rules entry did to the standing rules.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuleEffect {
+    /// A new rule is in force.
+    Kept { id: String, text: String },
+    /// A standing rule's wording changed.
+    Superseded { id: String, from: String, to: String },
+    /// A standing rule was withdrawn.
+    Retracted { id: String, text: String },
+    /// The instruction restated a rule already in force.
+    Duplicate { id: String, text: String },
+}
+
+/// One rules entry's effect, with the host's instruction it answered when
+/// it answered one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuleOutcome {
+    pub instruction: Option<String>,
+    pub effect: RuleEffect,
+}
+
+/// What applying a harvest did: the traces, and every rules entry's effect.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Applied {
+    pub traces: Vec<String>,
+    pub rules: Vec<RuleOutcome>,
+}
+
+/// How memory answered one instruction the host sent to be resolved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Resolution {
+    Rule(RuleEffect),
+    /// No rules entry answered it: the harvester judged it not a standing
+    /// instruction, or found nothing to retract.
+    NotARule,
+}
+
+/// Every instruction the host sent, resolved: the last rules entry that
+/// answered it, or [`Resolution::NotARule`] when none did.
+pub fn resolve(instructions: &[Instruction], applied: &Applied) -> Vec<(String, Resolution)> {
+    instructions
+        .iter()
+        .map(|i| {
+            let answered = applied
+                .rules
+                .iter()
+                .rev()
+                .find(|o| o.instruction.as_deref() == Some(i.id.as_str()))
+                .map(|o| Resolution::Rule(o.effect.clone()));
+            (i.id.clone(), answered.unwrap_or(Resolution::NotARule))
+        })
+        .collect()
+}
+
+pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
     let mut traces = Vec::new();
+    let mut rules = Vec::new();
 
     // Every apply starts on the structural invariants, so a graph written
     // before they held is repaired the first time it is touched.
@@ -995,8 +1145,7 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
                         ));
                     }
                     let homes = graph.antichain(distillants.clone());
-                    let mut leaf = Leaf::new(id.clone(), Species::State, text.clone(), homes, now);
-                    leaf.salience.importance = importance;
+                    let mut leaf = Leaf::state(id.clone(), text.clone(), homes, importance, now);
                     leaf.evidence = evidence.clone();
                     leaf.occurred_at = occurred_at;
                     // Residual pressure: a fact hanging directly off a crown root
@@ -1012,48 +1161,53 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
                     graph.leaves.insert(id.clone(), leaf);
                 } else {
                     let leaf = graph.leaves.get_mut(&target_id).expect("checked above");
-                    {
-                        let event_at = occurred_at.unwrap_or(now);
-                        match relation {
-                            Relation::Novel => {
-                                // Id collision with different text: states switch.
-                                if leaf.text != text {
-                                    belief::supersede(leaf, text.clone(), event_at, now);
-                                    leaf.occurred_at = occurred_at;
-                                    traces.push(format!("⇄ superseded [{}] → {}", target_id, text));
-                                } else {
-                                    belief::support(&mut leaf.belief, now);
-                                    traces.push(format!("↑ re-affirmed [{}]", target_id));
-                                }
-                            }
-                            Relation::Duplicate => {
-                                traces.push(format!("≡ duplicate of [{}] (no change)", target_id));
-                            }
-                            Relation::Supports => {
-                                belief::support(&mut leaf.belief, now);
-                                leaf.evidence.extend(evidence.iter().cloned());
-                                leaf.updated_at = now;
-                                traces.push(format!(
-                                    "↑ supports [{}] ({} for / {} against)",
-                                    target_id, leaf.belief.support, leaf.belief.contradict
-                                ));
-                            }
-                            Relation::Contradicts => {
-                                belief::contradict(&mut leaf.belief, now);
-                                leaf.evidence.extend(evidence.iter().cloned());
-                                leaf.updated_at = now;
-                                let s = belief::strength(&leaf.belief);
-                                traces.push(format!(
-                                    "↓ contradicts [{}] (strength now {:.2})",
-                                    target_id, s
-                                ));
-                            }
-                            Relation::Supersedes => {
-                                belief::supersede(leaf, text.clone(), event_at, now);
-                                leaf.occurred_at = occurred_at;
-                                leaf.evidence.extend(evidence.iter().cloned());
+                    let Leaf { text: leaf_text, kind, evidence: leaf_evidence, occurred_at: leaf_occurred_at, updated_at, .. } = leaf;
+                    let LeafKind::State(state) = kind else {
+                        traces.push(format!("⚠ state op targets the {} [{target_id}]; skipped", kind.species().name()));
+                        continue;
+                    };
+                    let event_at = occurred_at.unwrap_or(now);
+                    match relation {
+                        Relation::Novel => {
+                            // Id collision with different text: states switch.
+                            if *leaf_text != text {
+                                belief::supersede(leaf_text, state, text.clone(), event_at, now);
+                                *leaf_occurred_at = occurred_at;
+                                *updated_at = now;
                                 traces.push(format!("⇄ superseded [{}] → {}", target_id, text));
+                            } else {
+                                belief::support(&mut state.belief, now);
+                                traces.push(format!("↑ re-affirmed [{}]", target_id));
                             }
+                        }
+                        Relation::Duplicate => {
+                            traces.push(format!("≡ duplicate of [{}] (no change)", target_id));
+                        }
+                        Relation::Supports => {
+                            belief::support(&mut state.belief, now);
+                            leaf_evidence.extend(evidence.iter().cloned());
+                            *updated_at = now;
+                            traces.push(format!(
+                                "↑ supports [{}] ({} for / {} against)",
+                                target_id, state.belief.support, state.belief.contradict
+                            ));
+                        }
+                        Relation::Contradicts => {
+                            belief::contradict(&mut state.belief, now);
+                            leaf_evidence.extend(evidence.iter().cloned());
+                            *updated_at = now;
+                            let s = belief::strength(&state.belief);
+                            traces.push(format!(
+                                "↓ contradicts [{}] (strength now {:.2})",
+                                target_id, s
+                            ));
+                        }
+                        Relation::Supersedes => {
+                            belief::supersede(leaf_text, state, text.clone(), event_at, now);
+                            *leaf_occurred_at = occurred_at;
+                            *updated_at = now;
+                            leaf_evidence.extend(evidence.iter().cloned());
+                            traces.push(format!("⇄ superseded [{}] → {}", target_id, text));
                         }
                     }
                 }
@@ -1065,42 +1219,57 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
                 }
                 let importance = importance.clamp(0.0, 1.0);
                 if let Some(leaf) = graph.leaves.get_mut(&id) {
-                    let flipped = belief::apply_nudge(leaf, dir, note, now);
-                    if !text.is_empty() && leaf.text != text {
-                        leaf.text = text;
+                    let Leaf { text: leaf_text, kind, updated_at, .. } = leaf;
+                    let LeafKind::Disposition(d) = kind else {
+                        traces.push(format!("⚠ nudge targets the {} [{id}]; skipped", kind.species().name()));
+                        continue;
+                    };
+                    let flipped = belief::apply_nudge(d, dir, note, now);
+                    *updated_at = now;
+                    if !text.is_empty() && *leaf_text != text {
+                        *leaf_text = text;
                     }
-                    let mut line = format!("~ nudge [{}] {:+} (axis {:+.2})", id, dir, leaf.axis);
+                    let mut line = format!("~ nudge [{}] {:+} (axis {:+.2})", id, dir, d.axis);
                     if flipped {
                         line.push_str(" — POLARITY FLIPPED");
                     }
                     traces.push(line);
                 } else {
                     let homes = graph.antichain(distillants);
-                    let mut leaf = Leaf::new(id.clone(), Species::Disposition, text.clone(), homes, now);
-                    leaf.salience.importance = importance;
-                    leaf.axis = belief::nudge_axis(0.0, dir);
-                    leaf.nudges.push(crate::model::Nudge { dir, note, at: now });
+                    // Born with one supporting event (the birth itself) and its
+                    // first nudge as the whole trajectory.
+                    let mut leaf = Leaf::disposition(id.clone(), text.clone(), homes, importance, now);
+                    let LeafKind::Disposition(d) = &mut leaf.kind else { unreachable!("built as a disposition") };
+                    d.axis = belief::nudge_axis(0.0, dir);
+                    d.nudges.push(Nudge { dir, note, at: now });
+                    let axis = d.axis;
                     leaf.evidence = evidence.clone();
-                    traces.push(format!("+ disposition [{}] {} (axis {:+.2})", id, text, leaf.axis));
+                    traces.push(format!("+ disposition [{}] {} (axis {:+.2})", id, text, axis));
                     graph.leaves.insert(id, leaf);
                 }
             }
+            Op::Rule(op) => apply_rule(graph, op, now, &evidence, &mut traces, &mut rules),
             Op::Reinforce { target } => {
-                if let Some(leaf) = graph.leaves.get_mut(&target) {
-                    belief::support(&mut leaf.belief, now);
-                    for e in &evidence {
-                        if !leaf.evidence.contains(e) {
-                            leaf.evidence.push(e.clone());
-                        }
-                    }
-                    leaf.updated_at = now;
-                    traces.push(format!(
-                        "↑ reinforced [{}] ({} for / {} against)",
-                        target, leaf.belief.support, leaf.belief.contradict
-                    ));
-                } else {
+                let Some(leaf) = graph.leaves.get_mut(&target) else {
                     traces.push(format!("⚠ reinforce on missing leaf [{target}]; skipped"));
+                    continue;
+                };
+                let Leaf { kind, evidence: leaf_evidence, updated_at, .. } = leaf;
+                let Some(belief) = kind.belief_mut() else {
+                    traces.push(format!("⚠ reinforce on rule [{target}]; a rule carries no belief; skipped"));
+                    continue;
+                };
+                belief::support(belief, now);
+                for e in &evidence {
+                    if !leaf_evidence.contains(e) {
+                        leaf_evidence.push(e.clone());
+                    }
                 }
+                *updated_at = now;
+                traces.push(format!(
+                    "↑ reinforced [{}] ({} for / {} against)",
+                    target, belief.support, belief.contradict
+                ));
             }
             Op::Alias { distillant, add } => {
                 if graph.distillants.contains_key(&distillant) {
@@ -1138,7 +1307,121 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Vec<String> {
             }
         }
     }
-    traces
+    Applied { traces, rules }
+}
+
+/// The words a rules entry writes: the instruction text, the host
+/// instruction it answers, and when it was given.
+struct RuleWords {
+    text: String,
+    instruction: Option<String>,
+    occurred_at: Option<u64>,
+}
+
+/// A new rule in force: the user's words under no distillant, the batch's
+/// episodes as evidence.
+fn keep_rule(graph: &mut Graph, id: String, words: RuleWords, now: u64, evidence: &[String], traces: &mut Vec<String>) -> RuleEffect {
+    let RuleWords { text, instruction, occurred_at } = words;
+    let mut leaf = Leaf::rule(id.clone(), text.clone(), instruction, now);
+    leaf.evidence = evidence.to_vec();
+    leaf.occurred_at = occurred_at;
+    traces.push(format!("+ rule [{}] {}", id, text));
+    graph.leaves.insert(id.clone(), leaf);
+    RuleEffect::Kept { id, text }
+}
+
+/// A standing rule reworded: the old words become history, the instruction
+/// that changed it is the one it now answers.
+fn supersede_rule(leaf: &mut Leaf, words: RuleWords, now: u64, evidence: &[String], traces: &mut Vec<String>) -> RuleEffect {
+    let RuleWords { text, instruction, occurred_at } = words;
+    let Leaf { id, text: leaf_text, kind, evidence: leaf_evidence, occurred_at: leaf_occurred_at, updated_at, .. } = leaf;
+    let LeafKind::Rule(rule) = kind else { unreachable!("a standing rule is a rule leaf") };
+    let from = std::mem::replace(leaf_text, text.clone());
+    rule.history.push(Supersession { value: from.clone(), superseded_at: occurred_at.unwrap_or(now) });
+    if instruction.is_some() {
+        rule.instruction = instruction;
+    }
+    *leaf_occurred_at = occurred_at;
+    *updated_at = now;
+    leaf_evidence.extend(evidence.iter().cloned());
+    traces.push(format!("⇄ rule superseded [{}] → {}", id, text));
+    RuleEffect::Superseded { id: id.clone(), from, to: text }
+}
+
+/// One rules entry against the standing rules. A rule id is never shared
+/// with a state or disposition, and a rule is never weighed, so every
+/// relation resolves by whether the target is a rule already in force.
+fn apply_rule(
+    graph: &mut Graph,
+    op: RuleOp,
+    now: u64,
+    evidence: &[String],
+    traces: &mut Vec<String>,
+    outcomes: &mut Vec<RuleOutcome>,
+) {
+    let RuleOp { id, text, relation, target, instruction, occurred_at } = op;
+    let instruction = (!instruction.trim().is_empty()).then(|| instruction.trim().to_string());
+    let target_id = if target.is_empty() { id.clone() } else { target.clone() };
+    let text = text.trim().to_string();
+    let standing = match graph.leaves.get(&target_id) {
+        Some(leaf) if leaf.is_rule() => true,
+        Some(leaf) => {
+            traces.push(format!("⚠ rule op targets the {} [{target_id}]; skipped", leaf.species().name()));
+            return;
+        }
+        None => false,
+    };
+    let names_nothing_to_keep = text.is_empty() && relation != RuleRelation::Retract;
+    if names_nothing_to_keep {
+        traces.push(format!("⚠ rule [{target_id}] with no text; skipped"));
+        return;
+    }
+    let answers = instruction.clone();
+    let words = RuleWords { text, instruction, occurred_at };
+    let effect = match (relation, standing) {
+        (RuleRelation::Novel, false) => keep_rule(graph, id, words, now, evidence, traces),
+        (RuleRelation::Novel, true) => {
+            // Id collision: new words on a standing id supersede; the same
+            // words restate it.
+            let leaf = graph.leaves.get_mut(&target_id).expect("standing");
+            if leaf.text == words.text {
+                traces.push(format!("≡ rule [{target_id}] re-affirmed (no change)"));
+                RuleEffect::Duplicate { id: target_id, text: words.text }
+            } else {
+                supersede_rule(leaf, words, now, evidence, traces)
+            }
+        }
+        (RuleRelation::Supersedes, true) => {
+            let leaf = graph.leaves.get_mut(&target_id).expect("standing");
+            supersede_rule(leaf, words, now, evidence, traces)
+        }
+        (RuleRelation::Supersedes, false) | (RuleRelation::Duplicate, false) => {
+            // The self-healing fallback: a relation naming a rule that is
+            // not in force keeps the words as a new rule.
+            traces.push(format!("⚠ {relation:?} on missing rule [{target_id}]; storing as novel"));
+            keep_rule(graph, id, words, now, evidence, traces)
+        }
+        (RuleRelation::Duplicate, true) => {
+            let standing_text = graph.leaves[&target_id].text.clone();
+            traces.push(format!("≡ duplicate of rule [{target_id}] (no change)"));
+            RuleEffect::Duplicate { id: target_id, text: standing_text }
+        }
+        (RuleRelation::Retract, true) => {
+            let standing_text = graph.leaves[&target_id].text.clone();
+            let gone = graph.forget(&target_id, now).expect("standing");
+            traces.push(format!(
+                "✗ rule retracted [{}] — {} episodes left the stream with it",
+                target_id,
+                gone.episodes.len()
+            ));
+            RuleEffect::Retracted { id: target_id, text: standing_text }
+        }
+        (RuleRelation::Retract, false) => {
+            traces.push(format!("⚠ retract of unknown rule [{target_id}]; skipped"));
+            return;
+        }
+    };
+    outcomes.push(RuleOutcome { instruction: answers, effect });
 }
 
 fn apply_forget(graph: &mut Graph, target: String, now: u64, traces: &mut Vec<String>) {
@@ -1156,19 +1439,23 @@ fn apply_forget(graph: &mut Graph, target: String, now: u64, traces: &mut Vec<St
 }
 
 fn apply_move(graph: &mut Graph, leaf_id: String, parents: Vec<String>, now: u64, traces: &mut Vec<String>) {
-    let Some(species) = graph.leaves.get(&leaf_id).map(|l| l.species) else {
+    let Some(species) = graph.leaves.get(&leaf_id).map(|l| l.species()) else {
         traces.push(format!("⚠ move of unknown leaf [{leaf_id}]; skipped"));
         return;
+    };
+    let tree = match species {
+        Species::State => Tree::Registry,
+        Species::Disposition => Tree::Profile,
+        Species::Rule => {
+            traces.push(format!("⚠ move of rule [{leaf_id}]; a rule hangs under nothing; skipped"));
+            return;
+        }
     };
     let parents = graph.antichain(parents);
     if parents.is_empty() {
         traces.push(format!("⚠ move of [{leaf_id}] with no parents; skipped"));
         return;
     }
-    let tree = match species {
-        Species::State => Tree::Registry,
-        Species::Disposition => Tree::Profile,
-    };
     for p in &parents {
         ensure_distillant(graph, p, tree, traces);
     }
@@ -1200,23 +1487,57 @@ fn apply_reparent(graph: &mut Graph, distillant_id: String, parents: Vec<String>
     traces.push(format!("→ reparented {distillant_id} under {dest}"));
 }
 
-fn apply_merge_leaf(graph: &mut Graph, from: String, into: String, now: u64, traces: &mut Vec<String>) {
-    if from == into
-        || !graph.leaves.contains_key(&from)
-        || !graph.leaves.contains_key(&into)
-        || graph.leaves[&from].species != graph.leaves[&into].species
-    {
-        traces.push(format!("⚠ merge_leaves [{from}] → [{into}] invalid (missing, same id, or species mismatch); skipped"));
-        return;
+/// Which pair of weighed leaves a merge combines. A rule is never merged:
+/// two rules saying the same thing are one supersession away from one.
+enum MergePair {
+    States,
+    Dispositions,
+}
+
+fn merge_pair(from: &Leaf, into: &Leaf) -> Option<MergePair> {
+    match (&from.kind, &into.kind) {
+        (LeafKind::State(_), LeafKind::State(_)) => Some(MergePair::States),
+        (LeafKind::Disposition(_), LeafKind::Disposition(_)) => Some(MergePair::Dispositions),
+        (LeafKind::Rule(_), _) | (_, LeafKind::Rule(_)) => None,
+        (LeafKind::State(_), LeafKind::Disposition(_)) | (LeafKind::Disposition(_), LeafKind::State(_)) => None,
     }
+}
+
+fn merge_weight(dst_belief: &mut Belief, dst_salience: &mut Salience, src_belief: &Belief, src_salience: &Salience) {
+    dst_belief.support += src_belief.support;
+    dst_belief.contradict += src_belief.contradict;
+    dst_belief.last_event_at = dst_belief.last_event_at.max(src_belief.last_event_at);
+    dst_salience.importance = dst_salience.importance.max(src_salience.importance);
+    dst_salience.retrieval_count += src_salience.retrieval_count;
+    dst_salience.last_retrieved_at = dst_salience.last_retrieved_at.max(src_salience.last_retrieved_at);
+}
+
+fn apply_merge_leaf(graph: &mut Graph, from: String, into: String, now: u64, traces: &mut Vec<String>) {
+    let pair = match (graph.leaves.get(&from), graph.leaves.get(&into)) {
+        (Some(src), Some(dst)) if from != into => merge_pair(src, dst),
+        _ => None,
+    };
+    let Some(pair) = pair else {
+        traces.push(format!("⚠ merge_leaves [{from}] → [{into}] invalid (missing, same id, a rule, or species mismatch); skipped"));
+        return;
+    };
     let src = graph.leaves.remove(&from).expect("checked above");
     let dst = graph.leaves.get_mut(&into).expect("checked above");
-    dst.belief.support += src.belief.support;
-    dst.belief.contradict += src.belief.contradict;
-    dst.belief.last_event_at = dst.belief.last_event_at.max(src.belief.last_event_at);
-    dst.salience.importance = dst.salience.importance.max(src.salience.importance);
-    dst.salience.retrieval_count += src.salience.retrieval_count;
-    dst.salience.last_retrieved_at = dst.salience.last_retrieved_at.max(src.salience.last_retrieved_at);
+    match (pair, &mut dst.kind, src.kind) {
+        (MergePair::States, LeafKind::State(d), LeafKind::State(s)) => {
+            merge_weight(&mut d.belief, &mut d.salience, &s.belief, &s.salience);
+            d.history.extend(s.history);
+            d.history.sort_by_key(|h| h.superseded_at);
+        }
+        (MergePair::Dispositions, LeafKind::Disposition(d), LeafKind::Disposition(s)) => {
+            merge_weight(&mut d.belief, &mut d.salience, &s.belief, &s.salience);
+            // Replay the combined trajectory so the axis stays derived, not blended.
+            d.nudges.extend(s.nudges);
+            d.nudges.sort_by_key(|n| n.at);
+            d.axis = d.nudges.iter().fold(0.0, |a, n| belief::nudge_axis(a, n.dir));
+        }
+        (MergePair::States, _, _) | (MergePair::Dispositions, _, _) => unreachable!("the pair was read from these kinds"),
+    }
     for e in src.evidence {
         if !dst.evidence.contains(&e) {
             dst.evidence.push(e);
@@ -1224,14 +1545,6 @@ fn apply_merge_leaf(graph: &mut Graph, from: String, into: String, now: u64, tra
     }
     let mut homes = dst.parents.clone();
     homes.extend(src.parents);
-    dst.history.extend(src.history);
-    dst.history.sort_by_key(|s| s.superseded_at);
-    if dst.species == Species::Disposition {
-        // Replay the combined trajectory so the axis stays derived, not blended.
-        dst.nudges.extend(src.nudges);
-        dst.nudges.sort_by_key(|n| n.at);
-        dst.axis = dst.nudges.iter().fold(0.0, |a, n| belief::nudge_axis(a, n.dir));
-    }
     dst.created_at = dst.created_at.min(src.created_at);
     dst.occurred_at = match (dst.occurred_at, src.occurred_at) {
         (Some(a), Some(b)) => Some(a.min(b)),
@@ -1303,7 +1616,179 @@ fn apply_merge_distillant(graph: &mut Graph, from: String, into: String, traces:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::DispositionKind;
     use crate::routing::RoutingTable;
+
+    fn disposition_of<'g>(g: &'g Graph, id: &str) -> &'g DispositionKind {
+        let LeafKind::Disposition(d) = &g.leaves[id].kind else { panic!("{id} is not a disposition") };
+        d
+    }
+
+    fn rule_op(id: &str, text: &str, relation: RuleRelation, target: &str, instruction: &str) -> Op {
+        Op::Rule(RuleOp {
+            id: id.into(),
+            text: text.into(),
+            relation,
+            target: target.into(),
+            instruction: instruction.into(),
+            occurred_at: None,
+        })
+    }
+
+    fn instruction(id: &str, utterance: &str, paraphrase: &str) -> Instruction {
+        Instruction { id: id.into(), utterance: utterance.into(), paraphrase: paraphrase.into() }
+    }
+
+    #[test]
+    fn a_rule_is_kept_superseded_and_retracted_by_id() {
+        let mut g = Graph::seed();
+        let applied = apply_ops(
+            &mut g,
+            vec![
+                Op::Episode { text: "Asked for five-line replies.".into(), tags: vec![], occurred_at: None },
+                rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", "i-1"),
+            ],
+            1_000,
+        );
+        assert_eq!(
+            applied.rules,
+            vec![RuleOutcome {
+                instruction: Some("i-1".into()),
+                effect: RuleEffect::Kept { id: "five-lines".into(), text: "keep replies to five lines".into() }
+            }]
+        );
+        let rule = &g.leaves["five-lines"];
+        assert!(rule.is_rule() && rule.parents.is_empty());
+        assert_eq!(rule.evidence.len(), 1, "the batch's episode is evidence");
+        let LeafKind::Rule(kind) = &rule.kind else { panic!() };
+        assert_eq!(kind.instruction.as_deref(), Some("i-1"));
+
+        let applied = apply_ops(
+            &mut g,
+            vec![rule_op("five-lines", "keep replies to three lines", RuleRelation::Supersedes, "five-lines", "i-2")],
+            2_000,
+        );
+        assert_eq!(
+            applied.rules[0].effect,
+            RuleEffect::Superseded { id: "five-lines".into(), from: "keep replies to five lines".into(), to: "keep replies to three lines".into() }
+        );
+        let rule = &g.leaves["five-lines"];
+        assert_eq!(rule.text, "keep replies to three lines");
+        assert_eq!(rule.kind.history()[0].value, "keep replies to five lines");
+        assert_eq!(rule.updated_at, 2_000);
+        let LeafKind::Rule(kind) = &rule.kind else { panic!() };
+        assert_eq!(kind.instruction.as_deref(), Some("i-2"), "the rule answers the instruction that last changed it");
+
+        // Same words again: a duplicate, whichever relation names it.
+        let applied = apply_ops(&mut g, vec![rule_op("five-lines", "keep replies to three lines", RuleRelation::Novel, "", "")], 2_500);
+        assert!(matches!(applied.rules[0].effect, RuleEffect::Duplicate { .. }), "{:?}", applied.rules);
+        assert_eq!(applied.rules[0].instruction, None);
+        assert!(g.leaves["five-lines"].kind.history().len() == 1, "no change");
+
+        let applied = apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "i-3")], 3_000);
+        assert_eq!(
+            applied.rules[0].effect,
+            RuleEffect::Retracted { id: "five-lines".into(), text: "keep replies to three lines".into() }
+        );
+        assert!(!g.leaves.contains_key("five-lines"));
+        assert!(g.episodes.is_empty(), "its sole evidence left the stream with it");
+        let applied = apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "i-4")], 3_500);
+        assert!(applied.rules.is_empty(), "retracting nothing answers nothing");
+        assert!(applied.traces.iter().any(|t| t.contains("retract of unknown rule")), "{:?}", applied.traces);
+    }
+
+    #[test]
+    fn instructions_resolve_in_order_and_unanswered_ones_are_not_rules() {
+        let mut g = Graph::seed();
+        let pending = vec![
+            instruction("i-1", "keep it to five lines", "reply in at most five lines"),
+            instruction("i-2", "actually, forget the length thing", "drop the length rule"),
+            instruction("i-3", "book the usual table tonight", "one-off reservation"),
+        ];
+        let prompt = build_user_message(&g, &HarvestInput { user_text: "…", assistant_text: "…", field_manual: "", instructions: &pending }, 1_000, DirectoryScope::Full);
+        assert!(prompt.contains("# Instructions to resolve"), "{prompt}");
+        assert!(prompt.contains("- [i-2] user said: \"actually, forget the length thing\" — read as: drop the length rule"), "{prompt}");
+        assert!(render_harvest_prompt(&g, &HarvestInput::turn("…", "…"), 1_000).contains("16. Rules:"));
+
+        let raw = json!({
+            "rules": [
+                {"id": "five-lines", "text": "keep it to five lines", "relation": "novel", "target": "", "instruction": "i-1", "occurred_at": null},
+                {"id": "five-lines", "text": "", "relation": "retract", "target": "five-lines", "instruction": "i-2", "occurred_at": null}
+            ]
+        })
+        .to_string();
+        let ops = parse_ops(&raw).unwrap();
+        assert_eq!(ops.len(), 2);
+        let applied = apply_ops(&mut g, ops, 1_000);
+        let resolved = resolve(&pending, &applied);
+        assert_eq!(resolved[0], ("i-1".into(), Resolution::Rule(RuleEffect::Kept { id: "five-lines".into(), text: "keep it to five lines".into() })));
+        assert_eq!(resolved[1], ("i-2".into(), Resolution::Rule(RuleEffect::Retracted { id: "five-lines".into(), text: "keep it to five lines".into() })));
+        assert_eq!(resolved[2], ("i-3".into(), Resolution::NotARule));
+        assert!(g.rules().is_empty(), "kept then retracted in the order given");
+    }
+
+    #[test]
+    fn a_rule_id_is_refused_by_every_weighing_op_and_hides_from_every_walk() {
+        let mut g = Graph::seed();
+        apply_ops(
+            &mut g,
+            vec![
+                state_op("rent-amount", "Rent is $2,200/mo.", Relation::Novel, ""),
+                rule_op("ask-first", "ask before any spend over $20", RuleRelation::Novel, "", ""),
+            ],
+            1_000,
+        );
+        let traces = apply_ops(
+            &mut g,
+            vec![
+                state_op("x", "twenty", Relation::Supports, "ask-first"),
+                Op::Disposition { id: "ask-first".into(), distillants: vec!["money-style".into()], text: "x".into(), dir: 1, note: "n".into(), importance: 0.5 },
+                Op::Reinforce { target: "ask-first".into() },
+                Op::Move { leaf: "ask-first".into(), parents: vec!["money".into()] },
+                Op::MergeLeaf { from: "ask-first".into(), into: "rent-amount".into() },
+                rule_op("rent-amount", "rent words", RuleRelation::Novel, "", ""),
+            ],
+            2_000,
+        )
+        .traces;
+        for refused in ["state op targets the rule", "nudge targets the rule", "reinforce on rule", "move of rule", "a rule, or species mismatch", "rule op targets the state"] {
+            assert!(traces.iter().any(|t| t.contains(refused)), "{refused}: {traces:?}");
+        }
+        let rule = &g.leaves["ask-first"];
+        assert_eq!(rule.text, "ask before any spend over $20");
+        assert!(rule.parents.is_empty() && rule.updated_at == 1_000, "untouched");
+        assert!(g.leaves["rent-amount"].kind.belief().unwrap().support == 1);
+        assert!(routing::RoutingTable::build(&g).matches("ask before any spend").is_empty(), "no routing reaches a rule");
+        assert!(projection::project(&g, "spend over $20?", 3_000).opened.iter().all(|o| !o.leaf_ids.contains(&"ask-first".to_string())));
+        assert!(!render_comparanda(&g, &routing::RoutingTable::build(&g), "spend over $20", 3_000).contains("ask-first"));
+        assert!(render_pinned_rules(&g).contains("- [ask-first] ask before any spend over $20"));
+        let stats = crate::consolidate::stats(&g);
+        assert!(!stats.contains("ask-first"), "a rule builds no pressure anywhere: {stats}");
+        assert!(stats.contains("(1 rules)"), "{stats}");
+        // The user's forget covers a rule like any leaf.
+        let ops = parse_ops(&json!({"forgets": [{"target": "ask-first"}]}).to_string()).unwrap();
+        apply_ops(&mut g, ops, 4_000);
+        assert!(!g.leaves.contains_key("ask-first"));
+    }
+
+    #[test]
+    fn a_rule_sections_parse_and_apply_after_dispositions() {
+        let raw = json!({
+            "dispositions": [{"id": "spend", "distillants": ["money-style"], "text": "keeps spending tight", "dir": 1, "note": "obs", "importance": 0.5}],
+            "rules": [{"id": "ask-first", "text": "ask before any spend over $20", "relation": "novel", "target": "", "instruction": "", "occurred_at": 77}],
+            "reinforces": [{"target": "spend"}]
+        })
+        .to_string();
+        let ops = parse_ops(&raw).unwrap();
+        assert!(matches!(ops[0], Op::Disposition { .. }));
+        assert!(matches!(&ops[1], Op::Rule(RuleOp { occurred_at: Some(77), .. })));
+        assert!(matches!(ops[2], Op::Reinforce { .. }));
+        assert_eq!(ops_schema()["required"].as_array().unwrap().iter().filter(|s| s == &"rules").count(), 1);
+        let mut g = Graph::seed();
+        let applied = apply_ops(&mut g, ops, 1_000);
+        assert_eq!(applied.rules.len(), 1);
+        assert_eq!(g.leaves["ask-first"].occurred_at, Some(77));
+    }
 
     fn state_op(id: &str, text: &str, relation: Relation, target: &str) -> Op {
         Op::State {
@@ -1329,7 +1814,7 @@ mod tests {
             },
             state_op("rent-amount", "Rent is $2,200/mo, due the 1st.", Relation::Novel, ""),
         ];
-        let traces = apply_ops(&mut g, ops, 1_000);
+        let traces = apply_ops(&mut g, ops, 1_000).traces;
         assert!(g.distillants.contains_key("money/rent"), "bare distillant auto-created");
         assert_eq!(g.distillants["money/rent"].parents, vec!["money"]);
         let leaf = &g.leaves["rent-amount"];
@@ -1488,7 +1973,7 @@ mod tests {
         .to_string();
         let ops = parse_ops(&raw).unwrap();
         assert!(matches!(ops.last(), Some(Op::Forget { .. })), "forgets sort last in apply order");
-        let traces = apply_ops(&mut g, ops, 2_000);
+        let traces = apply_ops(&mut g, ops, 2_000).traces;
         assert!(!g.leaves.contains_key("eats-katsu-curry"));
         assert!(g.episodes.is_empty(), "the leaf's sole-evidence episode left the stream with it");
         assert!(traces.iter().any(|t| t.starts_with("✗ forgot [eats-katsu-curry]")), "{traces:?}");
@@ -1516,7 +2001,7 @@ mod tests {
 
         let mut g = Graph::seed();
         let before = serde_json::to_value(&g).unwrap();
-        let traces = apply_ops(&mut g, vec![ops[1].clone(), ops[2].clone()], 1_000);
+        let traces = apply_ops(&mut g, vec![ops[1].clone(), ops[2].clone()], 1_000).traces;
         assert_eq!(
             serde_json::to_value(&g).unwrap(),
             before,
@@ -1528,13 +2013,17 @@ mod tests {
     #[test]
     fn the_field_manual_section_renders_only_when_entries_ride() {
         let g = Graph::seed();
-        let bare = build_user_message(&g, "hi", "", "", 1_000, DirectoryScope::Full);
+        let bare = build_user_message(&g, &HarvestInput::turn("hi", ""), 1_000, DirectoryScope::Full);
         assert!(!bare.contains("# Field manual"), "empty manual renders no section");
+        assert!(!bare.contains("# Instructions to resolve"), "nothing awaiting memory renders no section");
         let with = build_user_message(
             &g,
-            "hi",
-            "",
-            "- fetch against resy.com: plain fetch refused; use the paid search service",
+            &HarvestInput {
+                user_text: "hi",
+                assistant_text: "",
+                field_manual: "- fetch against resy.com: plain fetch refused; use the paid search service",
+                instructions: &[],
+            },
             1_000,
             DirectoryScope::Full,
         );
@@ -1558,7 +2047,7 @@ mod tests {
             1_000,
         );
         // A turn whose words route nowhere near `temperament`.
-        let prompt = render_harvest_prompt(&g, "ugh, broken again", "sorry about that", "", 2_000);
+        let prompt = render_harvest_prompt(&g, &HarvestInput::turn("ugh, broken again", "sorry about that"), 2_000);
         assert!(
             projection::project_with_caps(&g, "ugh, broken again", 2_000, 12, 48).is_empty(),
             "sanity: the turn text does not route to the profile"
@@ -1624,14 +2113,14 @@ mod tests {
         for axis in ["communication", "money-style", "temperament"] {
             g.distillants.get_mut(axis).unwrap().parents.clear();
         }
-        let traces = apply_ops(&mut g, vec![], 1_000);
+        let traces = apply_ops(&mut g, vec![], 1_000).traces;
         assert!(traces.iter().any(|t| t == "⇢ profile apex character created"), "{traces:?}");
         assert!(traces.iter().any(|t| t == "⇢ axes homed under the apex: communication, money-style, temperament"), "{traces:?}");
         assert_eq!(g.roots(Tree::Profile).len(), 1);
         // A harvester-declared axis with no parent is an axis of the apex too.
         apply_ops(&mut g, vec![Op::Distillant { id: "risk-appetite".into(), tree: Tree::Profile, label: "Risk appetite".into(), line: "Takes small bets.".into(), routing: vec![], parents: vec![] }], 2_000);
         assert_eq!(g.distillants["risk-appetite"].parents, vec![PROFILE_APEX]);
-        assert!(apply_ops(&mut g, vec![], 3_000).is_empty(), "nothing left to repair");
+        assert!(apply_ops(&mut g, vec![], 3_000).traces.is_empty(), "nothing left to repair");
     }
 
     #[test]
@@ -1665,10 +2154,11 @@ mod tests {
     #[test]
     fn harvest_prompt_render_is_self_contained() {
         let g = Graph::seed();
-        let p = render_harvest_prompt(&g, "rent went up to $2,400", "noted", "", 1_000);
+        let p = render_harvest_prompt(&g, &HarvestInput::turn("rent went up to $2,400", "noted"), 1_000);
         assert!(p.starts_with("# System\n"), "system contract inline");
         assert!(p.contains("# Output schema"), "schema inline — no source-reading required");
-        assert!(p.contains("\"merge_distillants\""), "all eleven sections present");
+        assert!(p.contains("\"merge_distillants\"") && p.contains("\"rules\""), "every section present");
+        assert!(p.contains("# Standing rules (pinned"), "the rules ride pinned for the harvester: {p}");
         assert!(p.contains("# Turn to harvest\nUser: rent went up to $2,400"));
     }
 
@@ -1700,7 +2190,8 @@ mod tests {
                 line: "Proves loyal through every trial.".into(),
             }],
             2_000,
-        );
+        )
+        .traces;
         let r = &g.distillants["people/xury"].routing;
         assert!(!r.contains(&"regret".to_string()) && !r.contains(&"regrets".to_string()));
         assert!(r.contains(&"xury".to_string()), "topical vocabulary survives the rewrite");
@@ -1787,7 +2278,7 @@ mod tests {
         );
         let leaf = &g.leaves["rent-amount"];
         assert_eq!(leaf.text, "Rent is $2,400/mo.");
-        assert_eq!(leaf.history[0].value, "Rent is $2,200/mo.");
+        assert_eq!(leaf.kind.history()[0].value, "Rent is $2,200/mo.");
     }
 
     #[test]
@@ -1797,7 +2288,7 @@ mod tests {
         apply_ops(&mut g, vec![state_op("rent-amount", "Rent is $2,500/mo.", Relation::Novel, "")], 2_000);
         let leaf = &g.leaves["rent-amount"];
         assert_eq!(leaf.text, "Rent is $2,500/mo.");
-        assert_eq!(leaf.history.len(), 1);
+        assert_eq!(leaf.kind.history().len(), 1);
     }
 
     #[test]
@@ -1811,7 +2302,7 @@ mod tests {
         );
         let leaf = &g.leaves["rent-amount"];
         assert_eq!(leaf.text, "Rent is $2,200/mo.");
-        assert_eq!(leaf.belief.contradict, 1);
+        assert_eq!(leaf.kind.belief().unwrap().contradict, 1);
     }
 
     #[test]
@@ -1826,14 +2317,13 @@ mod tests {
             importance: 0.5,
         };
         apply_ops(&mut g, vec![d(1)], 1_000);
-        let axis_initial = g.leaves["spend-discipline"].axis;
-        assert!(axis_initial > 0.0);
+        assert!(disposition_of(&g, "spend-discipline").axis > 0.0);
         for i in 0..8 {
             apply_ops(&mut g, vec![d(-1)], 2_000 + i);
         }
-        let leaf = &g.leaves["spend-discipline"];
-        assert!(leaf.axis < -0.3, "consistent counter-evidence drifts the axis across");
-        assert_eq!(leaf.nudges.len(), 9, "trajectory preserved");
+        let d = disposition_of(&g, "spend-discipline");
+        assert!(d.axis < -0.3, "consistent counter-evidence drifts the axis across");
+        assert_eq!(d.nudges.len(), 9, "trajectory preserved");
     }
 
     #[test]
@@ -1877,7 +2367,7 @@ mod tests {
         }
         apply_ops(&mut g, vec![sup], now);
         let leaf = &g.leaves["rent-amount"];
-        assert_eq!(leaf.history[0].superseded_at, now - month, "change dated at event time");
+        assert_eq!(leaf.kind.history()[0].superseded_at, now - month, "change dated at event time");
         assert_eq!(leaf.updated_at, now, "write time still governs freshness");
     }
 
@@ -1889,14 +2379,14 @@ mod tests {
             Op::Episode { text: "Paid rent on time again.".into(), tags: vec![], occurred_at: None },
             Op::Reinforce { target: "rent-amount".into() },
         ];
-        let traces = apply_ops(&mut g, ops, 2_000);
+        let traces = apply_ops(&mut g, ops, 2_000).traces;
         let leaf = &g.leaves["rent-amount"];
-        assert_eq!(leaf.belief.support, 2);
+        assert_eq!(leaf.kind.belief().unwrap().support, 2);
         assert_eq!(leaf.evidence.len(), 1, "episode wired as evidence");
         assert_eq!(leaf.text, "Rent is $2,200/mo.", "text untouched");
         assert!(traces.iter().any(|t| t.contains("reinforced")));
 
-        let traces = apply_ops(&mut g, vec![Op::Reinforce { target: "ghost".into() }], 3_000);
+        let traces = apply_ops(&mut g, vec![Op::Reinforce { target: "ghost".into() }], 3_000).traces;
         assert!(traces.iter().any(|t| t.contains("missing leaf")));
     }
 
@@ -1930,7 +2420,7 @@ mod tests {
             },
             Op::Move { leaf: "island-goats".into(), parents: vec!["life/island/animals".into()] },
         ];
-        let traces = apply_ops(&mut g, ops, 2_000);
+        let traces = apply_ops(&mut g, ops, 2_000).traces;
         assert_eq!(g.leaves["island-goats"].parents, vec!["life/island/animals"]);
         assert!(traces.iter().any(|t| t.contains("moved [island-goats]")));
         // And the leaf is now reachable through the new distillant's routing.
@@ -1967,7 +2457,8 @@ mod tests {
             &mut g,
             vec![Op::Reparent { distillant: "life".into(), parents: vec!["life/island/animals".into()] }],
             2_000,
-        );
+        )
+        .traces;
         assert!(traces.iter().any(|t| t.contains("would cycle")));
         assert!(g.distillants["life"].parents.is_empty(), "cycle-creating parent dropped");
     }
@@ -2004,13 +2495,14 @@ mod tests {
             &mut g,
             vec![Op::MergeLeaf { from: "rent-b".into(), into: "rent-a".into() }],
             3_000,
-        );
+        )
+        .traces;
         assert!(!g.leaves.contains_key("rent-b"));
         let leaf = &g.leaves["rent-a"];
-        assert_eq!(leaf.belief.support, 2, "counts combine");
+        assert_eq!(leaf.kind.belief().unwrap().support, 2, "counts combine");
         assert_eq!(leaf.evidence.len(), 2, "evidence unions");
         assert_eq!(leaf.parents, vec!["money/rent"], "parents union, antichained: the crown is implied by money/rent");
-        assert!((leaf.salience.importance - 0.9).abs() < 1e-6, "importance is max");
+        assert!((leaf.kind.salience().unwrap().importance - 0.9).abs() < 1e-6, "importance is max");
         assert!(traces.iter().any(|t| t.contains("merged [rent-b]")));
     }
 
@@ -2035,10 +2527,10 @@ mod tests {
         d("spend-a", 1, 2_000);
         d("spend-b", 1, 1_500);
         apply_ops(&mut g, vec![Op::MergeLeaf { from: "spend-b".into(), into: "spend-a".into() }], 3_000);
-        let leaf = &g.leaves["spend-a"];
-        assert_eq!(leaf.nudges.len(), 3);
-        let replayed = leaf.nudges.iter().fold(0.0, |a, n| belief::nudge_axis(a, n.dir));
-        assert!((leaf.axis - replayed).abs() < 1e-6, "axis re-derived from merged trajectory");
+        let d = disposition_of(&g, "spend-a");
+        assert_eq!(d.nudges.len(), 3);
+        let replayed = d.nudges.iter().fold(0.0, |a, n| belief::nudge_axis(a, n.dir));
+        assert!((d.axis - replayed).abs() < 1e-6, "axis re-derived from merged trajectory");
     }
 
     #[test]

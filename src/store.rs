@@ -31,14 +31,14 @@ pub fn save(path: &Path, graph: &Graph) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Leaf, Species};
+    use crate::model::Leaf;
 
     #[test]
     fn roundtrip() {
         let dir = std::env::temp_dir().join(format!("narrative-test-{}", std::process::id()));
         let path = dir.join("memory.json");
         let mut g = Graph::seed();
-        let l = Leaf::new("x".into(), Species::State, "fact".into(), vec!["money".into()], 1);
+        let l = Leaf::state("x".into(), "fact".into(), vec!["money".into()], 0.5, 1);
         g.leaves.insert(l.id.clone(), l);
         save(&path, &g).unwrap();
         let g2 = load(&path).unwrap();

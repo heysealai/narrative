@@ -37,13 +37,14 @@ true.
 
 ## How it works
 
-Three stores, one routing table, two motions:
+Three stores and a rules list, one routing table, two motions:
 
 | Store | Topology | Lifecycle |
 |---|---|---|
 | **Stream** | time-ordered episodes | immutable, accumulate, digest, fade |
 | **Registry** | noun-shaped tree of state facts | current value + supersession history (*states switch*) |
 | **Profile** | one apex (the character estimate) over a trait-shaped tree of dispositions | scored axes with nudge trajectories (*dispositions drift*); the apex line is distilled from the axis lines |
+| **Rules** | flat list under no tree | the user's standing instructions, verbatim; binding on first occurrence, changed only by a later instruction (*rules bind*) |
 
 **Write path (ambient, no remember-tool).** Every finished turn goes to the
 harvester, which emits structured ops — new leaves, supports / contradicts /
@@ -53,19 +54,25 @@ stop remembering something, the harvester names the ids that hold it and
 the content leaves every store — the leaf, and the stream episodes that were
 evidence for nothing else. Forgetting is the user's authority, applied last
 in the batch so nothing the same harvest wrote about the content survives
-it. The runtime does all arithmetic: belief strength is
-derived from countable events, never model-assigned. Cross-matching sees
-the **whole profile every time** (pinned for the harvester exactly as it is
-pinned for recall), so an observation about a tracked tendency lands as a
-nudge on that axis — belief strength can only accumulate on an axis the
-harvester can see. Facet routing is derived
+it. A rule-shaped ask ("from now on, five lines") lands as a **rule** in the
+user's own words, with no belief to move; a host that acknowledged such an
+ask before memory caught up hands it over as an *instruction to resolve*, and
+the runtime reports what memory did with each one. The runtime does all
+arithmetic: belief strength is derived from countable events, never
+model-assigned. Cross-matching sees the **whole profile and every standing
+rule every time** (pinned for the harvester exactly as they are pinned for
+recall), so an observation about a tracked tendency lands as a nudge on that
+axis — belief strength can only accumulate on an axis the harvester can
+see — and an instruction that changes a rule supersedes it by id. Facet routing is derived
 too — whatever evaluative families (trust, regret, fear…) a distillant's line
 carries are mirrored into its routing automatically; models write honest
 lines, the runtime compiles them.
 
-**Read path (mechanical, two motions).** The profile rides pinned in every
-request, opening with the `character` line — the engine's standing estimate of
-who this person is, redistilled as the axes beneath it move. Per turn, the message is lexically matched against the routing
+**Read path (mechanical, two motions).** The rules ride pinned in every
+request, rendered without ages so the block is byte-stable between changes;
+the profile rides pinned beneath them, opening with the `character` line —
+the engine's standing estimate of who this person is, redistilled as the
+axes beneath it move. Per turn, the message is lexically matched against the routing
 table; activated distillants project their best leaves (ranked by match
 score, then by the leaf: the message words it shares, then salience) under a
 fixed budget. For interrogation beyond what
@@ -160,7 +167,7 @@ narrative digest-prompt              # input for a due stream digest pass
 narrative digest "<text>" [--take n] # apply digest text (n = episodes covered)
 narrative redistill-prompt <distillant>      # that distillant's full contract
 narrative redistill <distillant> @out.json   # apply the redistill response
-narrative open <distillant> | profile | map | stream | stats | forget <id>
+narrative open <distillant|rules> | rules | profile | map | stream | stats | forget <id>
 narrative replay turns.json <full|compact|selective> report.json  # harvester over recorded turns
 ```
 
@@ -183,11 +190,11 @@ minted: [docs/harvest-scope-replay.md](docs/harvest-scope-replay.md).
 
 | | |
 |---|---|
-| `model.rs` | the three stores, leaves/distillants, seed crown |
+| `model.rs` | the three stores and the rules, leaves by kind, distillants, seed crown |
 | `belief.rs` | belief & salience arithmetic, EMA axis nudges, supersession |
 | `routing.rs` | routing table + lexical matching (read hot path) |
-| `projection.rs` | per-turn recall, pinned/skeleton/open rendering |
-| `harvest.rs` | post-turn harvester: structured-output ops + application |
+| `projection.rs` | per-turn recall, pinned rules/profile, skeleton and open rendering |
+| `harvest.rs` | post-turn harvester: structured-output ops + application, instruction resolution |
 | `consolidate.rs` | redistill (descent step: rewrite line + split/merge), pressure + drift trigger, residual stats |
 | `agent.rs` | system prompt assembly, open_memory tool loop |
 | `llm.rs` | Messages API client (raw HTTP) + scripted mock |

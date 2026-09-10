@@ -25,6 +25,7 @@ narrative — structured long-term memory engine
   narrative redistill <distillant-id> <json|@file|->
                                   apply a redistill response to that distillant
   narrative open <distillant-id>    read leaves under one distillant
+  narrative rules                 standing instructions (pinned first)
   narrative profile               pinned tier (always-inline profile)
   narrative map                   registry skeleton
   narrative stream [n]            last n episodes
@@ -105,7 +106,7 @@ fn main() -> Result<()> {
                 Some(a) => text_arg(a)?,
                 None => String::new(),
             };
-            println!("{}", harvest::render_harvest_prompt(&graph, &user, &assistant, "", now));
+            println!("{}", harvest::render_harvest_prompt(&graph, &harvest::HarvestInput::turn(&user, &assistant), now));
         }
         "apply" => {
             let src = match args.get(1).map(String::as_str) {
@@ -114,7 +115,7 @@ fn main() -> Result<()> {
             };
             let raw = text_arg(&src)?;
             let ops = harvest::parse_ops(&raw)?;
-            for t in harvest::apply_ops(&mut graph, ops, now) {
+            for t in harvest::apply_ops(&mut graph, ops, now).traces {
                 println!("✎ {t}");
             }
             print_due_hints(&graph);
@@ -166,6 +167,10 @@ fn main() -> Result<()> {
         "open" => {
             print!("{}", projection::render_open(&graph, args.get(1).map(String::as_str).unwrap_or(""), now))
         }
+        "rules" => match projection::render_rules(&graph) {
+            Some(rules) => print!("{rules}"),
+            None => println!("(no standing instructions yet)"),
+        },
         "profile" => print!("{}", projection::render_profile(&graph, now)),
         "map" => print!("{}", projection::render_registry_skeleton(&graph, now)),
         "stream" => {

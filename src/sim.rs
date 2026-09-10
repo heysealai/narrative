@@ -45,9 +45,9 @@ impl Sim {
             agent::run_turn(self.llm.as_ref(), &self.graph, &mut self.history, text, injection, now)?;
 
         // 3. Ambient harvest of the finished turn. Failure here must not eat the reply.
-        match harvest::run(self.llm.as_ref(), &mut self.graph, text, &reply, now) {
-            Ok(traces) => {
-                for t in &traces {
+        match harvest::run(self.llm.as_ref(), &mut self.graph, &harvest::HarvestInput::turn(text, &reply), now) {
+            Ok(applied) => {
+                for t in &applied.traces {
                     trace(&format!("✎ {t}"));
                 }
             }
@@ -85,7 +85,18 @@ impl Sim {
         match cmd {
             "/quit" | "/q" | "/exit" => return Ok(true),
             "/help" => println!("{}", HELP),
-            "/profile" => print!("{}", projection::render_profile(&self.graph, now)),
+            "/rules" => match projection::render_rules(&self.graph) {
+                Some(rules) => print!("{rules}"),
+                None => println!("(no standing instructions yet)"),
+            },
+            "/profile" => {
+                if let Some(rules) = projection::render_rules(&self.graph) {
+                    println!("{BOLD}# Standing instructions{RESET}");
+                    print!("{rules}");
+                    println!("{BOLD}# Profile{RESET}");
+                }
+                print!("{}", projection::render_profile(&self.graph, now));
+            }
             "/map" => print!("{}", projection::render_registry_skeleton(&self.graph, now)),
             "/tree" => {
                 println!("{BOLD}# Registry{RESET}");
@@ -118,8 +129,9 @@ impl Sim {
             }
             "/feed" => {
                 // Ingestion: harvest user-voice text directly, no agent turn.
-                match harvest::run(self.llm.as_ref(), &mut self.graph, arg, "", now) {
-                    Ok(traces) => {
+                match harvest::run(self.llm.as_ref(), &mut self.graph, &harvest::HarvestInput::turn(arg, ""), now) {
+                    Ok(applied) => {
+                        let traces = applied.traces;
                         for t in &traces {
                             trace(&format!("✎ {t}"));
                         }
@@ -180,7 +192,8 @@ impl Sim {
 
 const HELP: &str = "\
 chat:        type anything — full loop: project → recall → reply → harvest → save
-/profile     pinned tier (what always rides inline)
+/rules       standing instructions (pinned first, above the profile)
+/profile     pinned tier (what always rides inline: rules, then profile)
 /map         registry skeleton (the model's in-context map)
 /tree        both trees, with leaves
 /open <id>   open one distillant (what the open_memory tool returns)

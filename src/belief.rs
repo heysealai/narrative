@@ -3,8 +3,12 @@
 //! The model classifies (supports / contradicts / supersedes); this module
 //! moves the numbers. "Why did this belief move?" always has an answer like
 //! "four contradicting episodes in sixty days" — never model vibes.
+//!
+//! Every function here takes the part of a leaf it moves — a belief, a
+//! disposition, a state — so the caller decides by kind first and a rule,
+//! which carries none of these, never reaches the arithmetic.
 
-use crate::model::{Belief, Leaf, Nudge, Salience, Supersession};
+use crate::model::{Belief, DispositionKind, Leaf, LeafKind, Nudge, Salience, StateKind, Supersession};
 
 /// Laplace-smoothed belief strength in (0, 1).
 pub fn strength(b: &Belief) -> f32 {
@@ -40,19 +44,18 @@ pub fn flipped(before: f32, after: f32) -> bool {
     (before > -COMMIT && after <= -COMMIT) || (before < COMMIT && after >= COMMIT)
 }
 
-/// Apply a nudge to a disposition leaf, recording the trajectory.
+/// Apply a nudge to a disposition, recording the trajectory.
 /// Returns true on a genuine polarity flip: the axis crossed the commitment
 /// boundary against prior evidence — not a fresh leaf settling into its pole.
-pub fn apply_nudge(leaf: &mut Leaf, dir: i8, note: String, at: u64) -> bool {
-    let had_opposition = leaf.nudges.iter().any(|n| n.dir.signum() != dir.signum());
-    let before = leaf.axis;
-    leaf.axis = nudge_axis(leaf.axis, dir);
-    leaf.nudges.push(Nudge { dir, note, at });
-    support(&mut leaf.belief, at);
-    leaf.updated_at = at;
-    let flip = flipped(before, leaf.axis) && had_opposition;
+pub fn apply_nudge(d: &mut DispositionKind, dir: i8, note: String, at: u64) -> bool {
+    let had_opposition = d.nudges.iter().any(|n| n.dir.signum() != dir.signum());
+    let before = d.axis;
+    d.axis = nudge_axis(d.axis, dir);
+    d.nudges.push(Nudge { dir, note, at });
+    support(&mut d.belief, at);
+    let flip = flipped(before, d.axis) && had_opposition;
     if flip {
-        leaf.belief.last_against_at = at;
+        d.belief.last_against_at = at;
     }
     flip
 }
@@ -61,15 +64,13 @@ pub fn apply_nudge(leaf: &mut Leaf, dir: i8, note: String, at: u64) -> bool {
 /// (and the history of change is some of the most informative memory).
 /// `event_at` is when the change actually happened (story time for backlog
 /// imports); `now` is write time, which the arithmetic keys on.
-pub fn supersede(leaf: &mut Leaf, new_text: String, event_at: u64, now: u64) {
-    let old = std::mem::replace(&mut leaf.text, new_text);
-    leaf.history.push(Supersession { value: old, superseded_at: event_at });
+pub fn supersede(text: &mut String, state: &mut StateKind, new_text: String, event_at: u64, now: u64) {
+    let old = std::mem::replace(text, new_text);
+    state.history.push(Supersession { value: old, superseded_at: event_at });
     // The fresh belief keeps the against-stamp: the VALUE moved, and any
     // line written over the old value is now suspect regardless of
     // how believed the new one is.
-    leaf.belief =
-        Belief { support: 1, contradict: 0, last_event_at: now, last_against_at: now };
-    leaf.updated_at = now;
+    state.belief = Belief { support: 1, contradict: 0, last_event_at: now, last_against_at: now };
 }
 
 /// Salience: importance assigned at write, strengthened on retrieval,
@@ -82,30 +83,30 @@ pub fn effective_salience(s: &Salience, last_touch: u64, now: u64) -> f32 {
     (s.importance * decay + reinforcement).min(1.5)
 }
 
-fn last_touch(leaf: &Leaf) -> u64 {
-    leaf.salience.last_retrieved_at.unwrap_or(0).max(leaf.updated_at)
-}
-
 /// Retrieval ranking score: relevance is handled by routing (you only score
 /// leaves under an activated distillant); this combines recency, importance,
-/// reinforcement, and belief strength.
+/// reinforcement, and belief strength. A rule hangs under no distillant, so
+/// no ranking reaches one; its arm scores nothing.
 pub fn score(leaf: &Leaf, now: u64) -> f32 {
-    effective_salience(&leaf.salience, last_touch(leaf), now) * (0.5 + 0.5 * strength(&leaf.belief))
+    let (belief, salience) = match &leaf.kind {
+        LeafKind::State(s) => (&s.belief, &s.salience),
+        LeafKind::Disposition(d) => (&d.belief, &d.salience),
+        LeafKind::Rule(_) => return 0.0,
+    };
+    let last_touch = salience.last_retrieved_at.unwrap_or(0).max(leaf.updated_at);
+    effective_salience(salience, last_touch, now) * (0.5 + 0.5 * strength(belief))
 }
 
 pub fn mark_retrieved(leaf: &mut Leaf, now: u64) {
-    leaf.salience.retrieval_count += 1;
-    leaf.salience.last_retrieved_at = Some(now);
+    let Some(salience) = leaf.kind.salience_mut() else { return };
+    salience.retrieval_count += 1;
+    salience.last_retrieved_at = Some(now);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Leaf, Species};
-
-    fn leaf(species: Species) -> Leaf {
-        Leaf::new("t".into(), species, "text".into(), vec!["money".into()], 1_000)
-    }
+    use crate::model::Leaf;
 
     #[test]
     fn strength_is_laplace_smoothed() {
@@ -138,24 +139,29 @@ mod tests {
         assert_eq!(flips, 1, "the flip should be reported exactly once");
     }
 
+    fn state() -> (String, StateKind) {
+        let leaf = Leaf::state("t".into(), "text".into(), vec!["money".into()], 0.5, 1_000);
+        let LeafKind::State(state) = leaf.kind else { unreachable!() };
+        (leaf.text, state)
+    }
+
     #[test]
     fn supersede_keeps_history_and_resets_belief() {
-        let mut l = leaf(Species::State);
-        l.belief.support = 7;
-        supersede(&mut l, "rent is $2,400/mo".into(), 2_000, 2_000);
-        assert_eq!(l.text, "rent is $2,400/mo");
-        assert_eq!(l.history.len(), 1);
-        assert_eq!(l.history[0].value, "text");
-        assert_eq!(l.belief.support, 1);
+        let (mut text, mut state) = state();
+        state.belief.support = 7;
+        supersede(&mut text, &mut state, "rent is $2,400/mo".into(), 2_000, 2_000);
+        assert_eq!(text, "rent is $2,400/mo");
+        assert_eq!(state.history.len(), 1);
+        assert_eq!(state.history[0].value, "text");
+        assert_eq!(state.belief.support, 1);
     }
 
     #[test]
     fn supersede_event_time_lands_in_history_not_arithmetic() {
-        let mut l = leaf(Species::State);
-        supersede(&mut l, "moved to the cave".into(), 500, 9_000);
-        assert_eq!(l.history[0].superseded_at, 500, "display time is event time");
-        assert_eq!(l.updated_at, 9_000, "salience freshness stays on write time");
-        assert_eq!(l.belief.last_event_at, 9_000);
+        let (mut text, mut state) = state();
+        supersede(&mut text, &mut state, "moved to the cave".into(), 500, 9_000);
+        assert_eq!(state.history[0].superseded_at, 500, "display time is event time");
+        assert_eq!(state.belief.last_event_at, 9_000, "the arithmetic keys on write time");
     }
 
     #[test]
@@ -170,5 +176,13 @@ mod tests {
             effective_salience(&reinforced, 1_000_000, 1_000_000)
                 > effective_salience(&s, 1_000_000, 1_000_000)
         );
+    }
+
+    #[test]
+    fn a_rule_is_never_scored_or_touched() {
+        let mut rule = Leaf::rule("r".into(), "keep it short".into(), None, 1_000);
+        assert_eq!(score(&rule, 2_000), 0.0);
+        mark_retrieved(&mut rule, 2_000);
+        assert!(rule.kind.salience().is_none(), "retrieval leaves a rule untouched");
     }
 }

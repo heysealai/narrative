@@ -1,10 +1,17 @@
-//! Core data model: the three stores (stream / registry / profile).
+//! Core data model: the three stores (stream / registry / profile) and the
+//! rules beside them.
 //!
 //! - Stream: time-ordered episodes, the shared evidence pool.
 //! - Registry: noun-shaped tree of state facts (current value + supersession history).
 //! - Profile: trait-shaped tree of dispositions (scored axes with trajectories).
+//! - Rules: the user's standing instructions, in their own words. Binding
+//!   from the moment they are given: no belief, no salience, no parent —
+//!   nothing inferred moves one; only a later instruction supersedes or
+//!   retracts it.
 //!
 //! Both trees are DAGs of `Distillant`s; `Leaf`s hang off distillants (multi-parent).
+//! A rule is a leaf that hangs under nothing, so routing, projection and
+//! consolidation — which all walk by parent — never see one.
 
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -27,11 +34,24 @@ pub enum Tree {
     Profile,
 }
 
+/// What kind of leaf: the discriminant of [`LeafKind`], for renders,
+/// traces and comparisons that need the name alone.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Species {
     State,
     Disposition,
+    Rule,
+}
+
+impl Species {
+    pub fn name(self) -> &'static str {
+        match self {
+            Species::State => "state",
+            Species::Disposition => "disposition",
+            Species::Rule => "rule",
+        }
+    }
 }
 
 /// One event in the stream. Immutable once written.
@@ -105,28 +125,122 @@ pub struct Nudge {
     pub at: u64,
 }
 
+/// What a state fact carries beside its text: evidence-weighted belief,
+/// salience, and the values it superseded.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Leaf {
-    pub id: Id,
-    pub species: Species,
-    /// Small, boring, atomic. States: the current value sentence.
-    /// Dispositions: the axis statement ("tends to overspend late-month").
-    pub text: String,
-    /// Distillant ids this leaf hangs under (multi-parent DAG).
-    pub parents: Vec<Id>,
+pub struct StateKind {
+    #[serde(default)]
+    pub belief: Belief,
+    #[serde(default)]
+    pub salience: Salience,
+    /// Prior values, oldest first.
+    #[serde(default)]
+    pub history: Vec<Supersession>,
+}
+
+/// What a disposition carries beside its axis statement: belief, salience,
+/// the EMA position in [-1, 1], and the nudge trail that derived it.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DispositionKind {
+    #[serde(default)]
+    pub belief: Belief,
     #[serde(default)]
     pub salience: Salience,
     #[serde(default)]
-    pub belief: Belief,
-    /// States only: prior values, oldest first.
-    #[serde(default)]
-    pub history: Vec<Supersession>,
-    /// Dispositions only: EMA position in [-1, 1].
-    #[serde(default)]
     pub axis: f32,
-    /// Dispositions only: the nudge trail.
     #[serde(default)]
     pub nudges: Vec<Nudge>,
+}
+
+/// What a rule carries beside the user's words: the texts it superseded,
+/// and the host's instruction id it answered when it answered one. No
+/// belief, no salience: nothing inferred moves a rule.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RuleKind {
+    #[serde(default)]
+    pub history: Vec<Supersession>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instruction: Option<String>,
+}
+
+/// The species-specific part of a leaf. Tagged by `species` in the stored
+/// shape and flattened into the leaf, so a leaf written before rules
+/// existed decodes unchanged.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "species", rename_all = "snake_case")]
+pub enum LeafKind {
+    State(StateKind),
+    Disposition(DispositionKind),
+    Rule(RuleKind),
+}
+
+impl LeafKind {
+    pub fn species(&self) -> Species {
+        match self {
+            LeafKind::State(_) => Species::State,
+            LeafKind::Disposition(_) => Species::Disposition,
+            LeafKind::Rule(_) => Species::Rule,
+        }
+    }
+
+    /// The belief an evidence-weighted leaf carries; a rule carries none.
+    pub fn belief(&self) -> Option<&Belief> {
+        match self {
+            LeafKind::State(s) => Some(&s.belief),
+            LeafKind::Disposition(d) => Some(&d.belief),
+            LeafKind::Rule(_) => None,
+        }
+    }
+
+    pub fn belief_mut(&mut self) -> Option<&mut Belief> {
+        match self {
+            LeafKind::State(s) => Some(&mut s.belief),
+            LeafKind::Disposition(d) => Some(&mut d.belief),
+            LeafKind::Rule(_) => None,
+        }
+    }
+
+    /// The salience an evidence-weighted leaf carries; a rule carries none.
+    pub fn salience(&self) -> Option<&Salience> {
+        match self {
+            LeafKind::State(s) => Some(&s.salience),
+            LeafKind::Disposition(d) => Some(&d.salience),
+            LeafKind::Rule(_) => None,
+        }
+    }
+
+    pub fn salience_mut(&mut self) -> Option<&mut Salience> {
+        match self {
+            LeafKind::State(s) => Some(&mut s.salience),
+            LeafKind::Disposition(d) => Some(&mut d.salience),
+            LeafKind::Rule(_) => None,
+        }
+    }
+
+    /// The values this leaf superseded, oldest first: states and rules
+    /// switch; a disposition drifts and has no history of values.
+    pub fn history(&self) -> &[Supersession] {
+        match self {
+            LeafKind::State(s) => &s.history,
+            LeafKind::Disposition(_) => &[],
+            LeafKind::Rule(r) => &r.history,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Leaf {
+    pub id: Id,
+    /// Small, boring, atomic. States: the current value sentence.
+    /// Dispositions: the axis statement ("tends to overspend late-month").
+    /// Rules: the user's own words, present tense.
+    pub text: String,
+    /// Distillant ids this leaf hangs under (multi-parent DAG). A rule's
+    /// is always empty: it hangs under nothing, so no walk by parent
+    /// reaches it.
+    pub parents: Vec<Id>,
+    #[serde(flatten)]
+    pub kind: LeafKind,
     /// Episode ids backing this leaf.
     #[serde(default)]
     pub evidence: Vec<Id>,
@@ -138,22 +252,48 @@ pub struct Leaf {
 }
 
 impl Leaf {
-    pub fn new(id: Id, species: Species, text: String, parents: Vec<Id>, at: u64) -> Self {
-        Leaf {
-            id,
-            species,
-            text,
-            parents,
-            salience: Salience::default(),
-            belief: Belief { support: 1, contradict: 0, last_event_at: at, last_against_at: 0 },
+    fn born(id: Id, text: String, parents: Vec<Id>, kind: LeafKind, at: u64) -> Self {
+        Leaf { id, text, parents, kind, evidence: Vec::new(), occurred_at: None, created_at: at, updated_at: at }
+    }
+
+    fn first_belief(at: u64) -> Belief {
+        Belief { support: 1, contradict: 0, last_event_at: at, last_against_at: 0 }
+    }
+
+    /// A state fact born with one supporting event and the given importance.
+    pub fn state(id: Id, text: String, parents: Vec<Id>, importance: f32, at: u64) -> Self {
+        let kind = LeafKind::State(StateKind {
+            belief: Self::first_belief(at),
+            salience: Salience { importance, ..Salience::default() },
             history: Vec::new(),
+        });
+        Self::born(id, text, parents, kind, at)
+    }
+
+    /// A disposition born at the neutral axis position with no nudges yet.
+    pub fn disposition(id: Id, text: String, parents: Vec<Id>, importance: f32, at: u64) -> Self {
+        let kind = LeafKind::Disposition(DispositionKind {
+            belief: Self::first_belief(at),
+            salience: Salience { importance, ..Salience::default() },
             axis: 0.0,
             nudges: Vec::new(),
-            evidence: Vec::new(),
-            occurred_at: None,
-            created_at: at,
-            updated_at: at,
-        }
+        });
+        Self::born(id, text, parents, kind, at)
+    }
+
+    /// A rule: the user's words, under no distillant, answering the host's
+    /// instruction when it answered one.
+    pub fn rule(id: Id, text: String, instruction: Option<String>, at: u64) -> Self {
+        let kind = LeafKind::Rule(RuleKind { history: Vec::new(), instruction });
+        Self::born(id, text, Vec::new(), kind, at)
+    }
+
+    pub fn species(&self) -> Species {
+        self.kind.species()
+    }
+
+    pub fn is_rule(&self) -> bool {
+        matches!(self.kind, LeafKind::Rule(_))
     }
 }
 
@@ -332,6 +472,11 @@ impl Graph {
             .values()
             .filter(|l| l.parents.iter().any(|p| p == distillant_id))
             .collect()
+    }
+
+    /// Every rule, by id.
+    pub fn rules(&self) -> Vec<&Leaf> {
+        self.leaves.values().filter(|l| l.is_rule()).collect()
     }
 
     pub fn child_distillants(&self, distillant_id: &str) -> Vec<&Distillant> {
@@ -562,9 +707,10 @@ impl Graph {
     }
 
     /// Restore the structural invariants over the whole graph: the profile
-    /// tree has the apex as its one root with every axis under it, and
-    /// every leaf's and distillant's parents form an antichain. Ops keep
-    /// both as they go; this is for graphs written before they held.
+    /// tree has the apex as its one root with every axis under it, every
+    /// leaf's and distillant's parents form an antichain, and a rule hangs
+    /// under nothing. Ops keep all three as they go; this is for graphs
+    /// written before they held.
     pub fn normalize(&mut self) -> Normalized {
         let mut out = Normalized::default();
         if !self.distillants.contains_key(PROFILE_APEX) {
@@ -592,8 +738,9 @@ impl Graph {
         }
         let leaf_ids: Vec<Id> = self.leaves.keys().cloned().collect();
         for id in leaf_ids {
-            let parents = self.leaves[&id].parents.clone();
-            let homes = self.antichain(parents.clone());
+            let leaf = &self.leaves[&id];
+            let parents = leaf.parents.clone();
+            let homes = if leaf.is_rule() { Vec::new() } else { self.antichain(parents.clone()) };
             if homes != parents {
                 self.leaves.get_mut(&id).expect("listed above").parents = homes;
                 out.antichained.push(id);
@@ -752,7 +899,7 @@ mod tests {
     fn compression_remaps_leaf_evidence_to_digest() {
         let mut g = Graph::default();
         let first = g.push_episode("scammed by X".into(), vec![], 1, None);
-        let mut l = Leaf::new("scam".into(), Species::State, "Got scammed once.".into(), vec![], 1);
+        let mut l = Leaf::state("scam".into(), "Got scammed once.".into(), vec![], 0.5, 1);
         l.evidence.push(first.clone());
         g.leaves.insert(l.id.clone(), l);
         for i in 0..(STREAM_HARD_CAP + 1) {
@@ -806,11 +953,11 @@ mod tests {
     }
 
     fn leaf_with_evidence(g: &mut Graph, id: &str, parents: &[&str], evidence: &[&str]) {
-        let mut l = Leaf::new(
+        let mut l = Leaf::state(
             id.into(),
-            Species::State,
             format!("fact {id}"),
             parents.iter().map(|p| p.to_string()).collect(),
+            0.5,
             1,
         );
         l.evidence = evidence.iter().map(|e| e.to_string()).collect();
@@ -928,6 +1075,73 @@ mod tests {
         assert_eq!(g.roots(Tree::Profile).len(), 1);
         assert!(g.distillants[PROFILE_APEX].is_bare());
         assert!(g.normalize().is_empty(), "idempotent");
+    }
+
+    #[test]
+    fn a_leaf_written_before_rules_existed_decodes_into_its_kind() {
+        // The pre-enum shape: every species field present on every leaf.
+        let stored = serde_json::json!({
+            "id": "rent", "species": "state", "text": "Rent is $2,200.", "parents": ["money"],
+            "salience": {"importance": 0.9, "retrieval_count": 2, "last_retrieved_at": 5},
+            "belief": {"support": 3, "contradict": 1, "last_event_at": 4, "last_against_at": 2},
+            "history": [{"value": "Rent is $2,000.", "superseded_at": 3}],
+            "axis": 0.0, "nudges": [], "evidence": ["ep-1"], "created_at": 1, "updated_at": 4
+        });
+        let leaf: Leaf = serde_json::from_value(stored).unwrap();
+        assert_eq!(leaf.species(), Species::State);
+        let LeafKind::State(state) = &leaf.kind else { panic!("decoded as {:?}", leaf.kind) };
+        assert_eq!(state.belief.support, 3);
+        assert_eq!(state.history[0].value, "Rent is $2,000.");
+        assert!((state.salience.importance - 0.9).abs() < 1e-6);
+        let again: Leaf = serde_json::from_value(serde_json::to_value(&leaf).unwrap()).unwrap();
+        assert_eq!(again.kind.history().len(), 1, "the kind round-trips through its own encoding");
+
+        let stored = serde_json::json!({
+            "id": "spend", "species": "disposition", "text": "Keeps spending tight.", "parents": ["money-style"],
+            "axis": 0.4, "nudges": [{"dir": 1, "note": "obs", "at": 2}], "created_at": 1, "updated_at": 2
+        });
+        let leaf: Leaf = serde_json::from_value(stored).unwrap();
+        let LeafKind::Disposition(d) = &leaf.kind else { panic!("decoded as {:?}", leaf.kind) };
+        assert!((d.axis - 0.4).abs() < 1e-6);
+        assert_eq!(d.belief.support, 1, "an absent belief takes the default");
+    }
+
+    #[test]
+    fn a_rule_carries_no_weight_and_hangs_under_nothing() {
+        let rule = Leaf::rule("five-lines".into(), "keep replies to five lines".into(), Some("i-1".into()), 7);
+        assert!(rule.parents.is_empty());
+        assert!(rule.kind.belief().is_none() && rule.kind.salience().is_none());
+        assert_eq!(rule.species(), Species::Rule);
+        let encoded = serde_json::to_value(&rule).unwrap();
+        assert_eq!(encoded["species"], "rule");
+        assert_eq!(encoded["instruction"], "i-1");
+        assert!(encoded.get("belief").is_none(), "a rule stores no belief: {encoded}");
+        let decoded: Leaf = serde_json::from_value(encoded).unwrap();
+        assert!(decoded.is_rule());
+
+        // A rule that somehow acquired parents is unhomed by normalize.
+        let mut g = Graph::seed();
+        let mut homed = Leaf::rule("r".into(), "text".into(), None, 1);
+        homed.parents = vec!["money".into()];
+        g.leaves.insert(homed.id.clone(), homed);
+        let repaired = g.normalize();
+        assert_eq!(repaired.antichained, vec!["r"]);
+        assert!(g.leaves["r"].parents.is_empty());
+        assert!(g.leaves_under("money").is_empty(), "no walk by parent reaches a rule");
+        assert_eq!(g.rules().len(), 1);
+    }
+
+    #[test]
+    fn forget_covers_a_rule() {
+        let mut g = Graph::seed();
+        let ep = g.push_episode("asked for five lines".into(), vec![], 1, None);
+        let mut rule = Leaf::rule("five-lines".into(), "keep replies to five lines".into(), None, 1);
+        rule.evidence.push(ep.clone());
+        g.leaves.insert(rule.id.clone(), rule);
+        let gone = g.forget("five-lines", 9).expect("rule exists");
+        assert_eq!(gone.leaves, vec!["five-lines"]);
+        assert_eq!(gone.episodes, vec![ep], "its sole evidence goes with it");
+        assert!(g.distillants.values().all(|d| d.forgotten_at == 0), "no distillant held it, none is stamped");
     }
 
     #[test]
