@@ -68,6 +68,21 @@ too — whatever evaluative families (trust, regret, fear…) a distillant's lin
 carries are mirrored into its routing automatically; models write honest
 lines, the runtime compiles them.
 
+Saved documents enter separately through `HarvestInput.documents`, never
+through the Rule-only instruction-resolution contract. Their facts, dated
+experiences and independent explicit instructions can populate all memory
+kinds. `apply_harvest` applies the model's ops and archives the source text
+as episode evidence even when extraction returns nothing; that evidence
+follows ordinary stream compaction and forgetting. Every accepted op cites
+the batch's episodes on the leaf it landed on — a duplicate moves no
+belief, wording or clock, but still cites its source, so a document that
+only restated known memory is forgotten with what it restated. A relation
+naming a missing target stores its words as novel under its own id only
+when that id is free; it never overwrites another record. Hosts retain source rows
+until their graph transaction commits and redact secrets before supplying
+these inputs. The plain `apply_ops` seam remains for ops without source
+material; `run` uses `apply_harvest`.
+
 **Read path (mechanical, two motions).** The rules ride pinned in every
 request, rendered without ages so the block is byte-stable between changes;
 the profile rides pinned beneath them, opening with the `character` line —

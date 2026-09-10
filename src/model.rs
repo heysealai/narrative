@@ -618,16 +618,17 @@ impl Graph {
     /// distillant's children re-home to its parents and episode tags naming
     /// it are dropped. Every surviving distillant that held something
     /// removed is stamped `forgotten_at = now`, so its line reads as
-    /// drifted until a pass rewrites it. None when nothing has that id.
+    /// drifted until a pass rewrites it. A leaf goes with a forgotten
+    /// distillant only when every home it has is in that subtree — a
+    /// leaf under nothing (a rule) is under no subtree, so only its own id
+    /// forgets it. None when nothing has that id.
     pub fn forget(&mut self, id: &str, now: u64) -> Option<Forgotten> {
         let distillant_ids = self.forgotten_distillant_ids(id);
         let forgets_a_distillant = !distillant_ids.is_empty();
+        let wholly_under_forgotten =
+            |l: &Leaf| !l.parents.is_empty() && l.parents.iter().all(|p| distillant_ids.contains(p));
         let leaf_ids: Vec<Id> = if forgets_a_distillant {
-            self.leaves
-                .values()
-                .filter(|l| l.parents.iter().all(|p| distillant_ids.contains(p)))
-                .map(|l| l.id.clone())
-                .collect()
+            self.leaves.values().filter(|l| wholly_under_forgotten(l)).map(|l| l.id.clone()).collect()
         } else if self.leaves.contains_key(id) {
             vec![id.to_string()]
         } else {
@@ -1142,6 +1143,28 @@ mod tests {
         assert_eq!(gone.leaves, vec!["five-lines"]);
         assert_eq!(gone.episodes, vec![ep], "its sole evidence goes with it");
         assert!(g.distillants.values().all(|d| d.forgotten_at == 0), "no distillant held it, none is stamped");
+    }
+
+    #[test]
+    fn forget_distillant_spares_a_rule_and_every_other_parentless_leaf() {
+        let mut g = Graph::seed();
+        bare_distillant(&mut g, "work/hack", &["work"]);
+        let rule_ep = g.push_episode("asked for five lines".into(), vec![], 1, None);
+        let inner_ep = g.push_episode("hack built".into(), vec![], 2, None);
+        let mut rule = Leaf::rule("five-lines".into(), "keep replies to five lines".into(), None, 1);
+        rule.evidence.push(rule_ep.clone());
+        g.leaves.insert(rule.id.clone(), rule);
+        leaf_with_evidence(&mut g, "inner-fact", &["work/hack"], &[&inner_ep]);
+        leaf_with_evidence(&mut g, "orphan", &[], &[]);
+
+        let gone = g.forget("work/hack", 9).expect("distillant exists");
+        assert_eq!(gone.leaves, vec!["inner-fact"], "only what hung under the subtree goes");
+        assert_eq!(gone.episodes, vec![inner_ep]);
+        assert!(g.leaves["five-lines"].is_rule(), "a rule is under no subtree");
+        assert!(g.episodes.iter().any(|e| e.id == rule_ep), "the rule's evidence stays with it");
+        assert!(g.leaves.contains_key("orphan"), "a parentless leaf is under no subtree either");
+        assert!(!g.leaves.contains_key("inner-fact"));
+        assert_eq!(g.forget("five-lines", 10).expect("rule exists").leaves, vec!["five-lines"], "its own id still forgets it");
     }
 
     #[test]

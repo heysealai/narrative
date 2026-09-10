@@ -157,7 +157,9 @@ There is no explicit `remember` tool taxing the live turn. Writes are ambient:
   not a fact about the user to be classified — it is authority over what is held about
   them. The harvester emits `forgets` naming the ids that hold the content, applied
   after everything else in the batch; the runtime removes the leaf (or a distillant
-  with its subtree) and the stream episodes that were evidence for nothing else. An
+  with its subtree — every leaf whose homes all lie in it; a rule hangs under nothing
+  and goes only by its own id) and the stream episodes that were evidence for nothing
+  else. An
   episode restating the content, or one recording the request, would keep it
   recallable — the contract forbids both. This is still not a live-turn tool: the ask
   rides the same ambient harvest as every other write.

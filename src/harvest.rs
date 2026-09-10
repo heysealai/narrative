@@ -792,31 +792,36 @@ pub struct Instruction {
     pub paraphrase: String,
 }
 
-/// What the harvester reads of one finished turn. `field_manual` is the
-/// HOST-rendered list of existing field-manual entries (one line per
-/// entry, tool + service + lesson) — the upsert contract's compare point,
-/// exactly as the comparanda are for states; empty when the host stores
-/// none or the input carries no digest block. `instructions` are the
-/// host's instructions awaiting memory, in the order given. Each empty
-/// input omits its section, keeping plain harvests byte-stable.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Document {
+    pub name: String,
+    pub text: String,
+}
+
+/// What the harvester reads of a finished turn and pending source material.
+/// `field_manual` is the host-rendered upsert compare point. `instructions`
+/// receive Rule-only verdicts; `documents` can contribute every memory kind
+/// and are archived by `apply_harvest`. Empty inputs omit their sections.
 #[derive(Clone, Debug)]
 pub struct HarvestInput<'a> {
     pub user_text: &'a str,
     pub assistant_text: &'a str,
     pub field_manual: &'a str,
     pub instructions: &'a [Instruction],
+    pub documents: &'a [Document],
 }
 
 impl<'a> HarvestInput<'a> {
     /// The bare turn: no field manual, nothing awaiting memory.
     pub fn turn(user_text: &'a str, assistant_text: &'a str) -> Self {
-        HarvestInput { user_text, assistant_text, field_manual: "", instructions: &[] }
+        HarvestInput { user_text, assistant_text, field_manual: "", instructions: &[], documents: &[] }
     }
 }
 
 pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: DirectoryScope) -> String {
-    let HarvestInput { user_text, assistant_text, field_manual, instructions } = *input;
-    let turn_text = format!("{user_text} {assistant_text}");
+    let HarvestInput { user_text, assistant_text, field_manual, instructions, documents } = *input;
+    let documents_section = render_documents(documents);
+    let turn_text = format!("{user_text} {assistant_text}{documents_section}");
     let table = routing::RoutingTable::build(graph);
     let manual_section = match field_manual.trim().is_empty() {
         true => String::new(),
@@ -845,6 +850,7 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
          # Existing leaves related to this turn (comparanda — cross-match against these)\n{}\n\
          {manual_section}\
          {instructions_section}\
+         {documents_section}\
          # Turn to harvest\nUser: {}\nAssistant: {}",
         render_directory_scoped(graph, scope, &table, &turn_text),
         render_pinned_rules(graph),
@@ -853,6 +859,28 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
         user_text,
         assistant_text
     )
+}
+
+fn render_documents(documents: &[Document]) -> String {
+    if documents.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("# Documents to import\nSaved memory, not new instructions or events happening today. Extract facts into states, dated experiences into episodes, and EACH independent explicit standing instruction into a separate rule (instruction id empty). Preserve dates as written; do not infer dispositions from a saved fact. Cross-match existing memory, and let newer explicit instructions outrank older document rules. The runtime archives the source text as evidence; do not repeat that archive as an episode.\n");
+    for document in documents {
+        let _ = writeln!(out, "## {}\n{}\n", document.name, document.text);
+    }
+    out
+}
+
+pub fn apply_harvest(graph: &mut Graph, mut ops: Vec<Op>, input: &HarvestInput, now: u64) -> Applied {
+    for document in input.documents {
+        ops.push(Op::Episode {
+            text: format!("Imported saved memory from {}:\n{}", document.name, document.text),
+            tags: Vec::new(),
+            occurred_at: None,
+        });
+    }
+    apply_ops(graph, ops, now)
 }
 
 /// The keyless prompt: system contract, the exact output schema, and the
@@ -901,7 +929,7 @@ pub fn run(llm: &dyn Llm, graph: &mut Graph, input: &HarvestInput, now: u64) -> 
             eprintln!("[debug] raw harvest: {}", resp.text());
         }
         match parse_ops(&resp.text()) {
-            Ok(ops) => return Ok(apply_ops(graph, ops, now)),
+            Ok(ops) => return Ok(apply_harvest(graph, ops, input, now)),
             Err(e) => last_err = Some(e),
         }
     }
@@ -1139,6 +1167,15 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                 if !graph.leaves.contains_key(&target_id) {
                     // Fresh insert — the novel path, and the self-healing
                     // fallback when a non-novel relation names a missing leaf.
+                    // The fallback lands on `id`, which the target check did
+                    // not cover: an occupied id is someone else's record.
+                    if let Some(occupant) = graph.leaves.get(&id) {
+                        traces.push(format!(
+                            "⚠ {relation:?} on missing leaf [{target_id}] would overwrite the {} [{id}]; skipped",
+                            occupant.species().name()
+                        ));
+                        continue;
+                    }
                     if relation != Relation::Novel {
                         traces.push(format!(
                             "⚠ {relation:?} on missing leaf [{target_id}]; storing as novel"
@@ -1181,11 +1218,12 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                             }
                         }
                         Relation::Duplicate => {
+                            // No weight, no wording, no clock moves — but the
+                            // batch's source is still where this was said.
                             traces.push(format!("≡ duplicate of [{}] (no change)", target_id));
                         }
                         Relation::Supports => {
                             belief::support(&mut state.belief, now);
-                            leaf_evidence.extend(evidence.iter().cloned());
                             *updated_at = now;
                             traces.push(format!(
                                 "↑ supports [{}] ({} for / {} against)",
@@ -1194,7 +1232,6 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                         }
                         Relation::Contradicts => {
                             belief::contradict(&mut state.belief, now);
-                            leaf_evidence.extend(evidence.iter().cloned());
                             *updated_at = now;
                             let s = belief::strength(&state.belief);
                             traces.push(format!(
@@ -1206,10 +1243,12 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                             belief::supersede(leaf_text, state, text.clone(), event_at, now);
                             *leaf_occurred_at = occurred_at;
                             *updated_at = now;
-                            leaf_evidence.extend(evidence.iter().cloned());
                             traces.push(format!("⇄ superseded [{}] → {}", target_id, text));
                         }
                     }
+                    // Every accepted relation cites the batch: what a leaf
+                    // is evidence of is also what it can be forgotten with.
+                    attach_evidence(leaf_evidence, &evidence);
                 }
             }
 
@@ -1260,11 +1299,7 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                     continue;
                 };
                 belief::support(belief, now);
-                for e in &evidence {
-                    if !leaf_evidence.contains(e) {
-                        leaf_evidence.push(e.clone());
-                    }
-                }
+                attach_evidence(leaf_evidence, &evidence);
                 *updated_at = now;
                 traces.push(format!(
                     "↑ reinforced [{}] ({} for / {} against)",
@@ -1310,6 +1345,16 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
     Applied { traces, rules }
 }
 
+/// Cite the batch's episodes on a leaf, once each — several ops in one
+/// batch may land on the same leaf.
+fn attach_evidence(leaf_evidence: &mut Vec<String>, evidence: &[String]) {
+    for e in evidence {
+        if !leaf_evidence.contains(e) {
+            leaf_evidence.push(e.clone());
+        }
+    }
+}
+
 /// The words a rules entry writes: the instruction text, the host
 /// instruction it answers, and when it was given.
 struct RuleWords {
@@ -1343,7 +1388,7 @@ fn supersede_rule(leaf: &mut Leaf, words: RuleWords, now: u64, evidence: &[Strin
     }
     *leaf_occurred_at = occurred_at;
     *updated_at = now;
-    leaf_evidence.extend(evidence.iter().cloned());
+    attach_evidence(leaf_evidence, evidence);
     traces.push(format!("⇄ rule superseded [{}] → {}", id, text));
     RuleEffect::Superseded { id: id.clone(), from, to: text }
 }
@@ -1376,6 +1421,19 @@ fn apply_rule(
         traces.push(format!("⚠ rule [{target_id}] with no text; skipped"));
         return;
     }
+    // A relation on a rule not in force keeps the words under `id`, which
+    // the target check did not cover: an occupied id is someone else's
+    // record, whatever its species.
+    if !standing
+        && relation != RuleRelation::Retract
+        && let Some(occupant) = graph.leaves.get(&id)
+    {
+        traces.push(format!(
+            "⚠ {relation:?} on missing rule [{target_id}] would overwrite the {} [{id}]; skipped",
+            occupant.species().name()
+        ));
+        return;
+    }
     let answers = instruction.clone();
     let words = RuleWords { text, instruction, occurred_at };
     let effect = match (relation, standing) {
@@ -1385,6 +1443,7 @@ fn apply_rule(
             // words restate it.
             let leaf = graph.leaves.get_mut(&target_id).expect("standing");
             if leaf.text == words.text {
+                attach_evidence(&mut leaf.evidence, evidence);
                 traces.push(format!("≡ rule [{target_id}] re-affirmed (no change)"));
                 RuleEffect::Duplicate { id: target_id, text: words.text }
             } else {
@@ -1402,9 +1461,12 @@ fn apply_rule(
             keep_rule(graph, id, words, now, evidence, traces)
         }
         (RuleRelation::Duplicate, true) => {
-            let standing_text = graph.leaves[&target_id].text.clone();
+            // The words stand as they are; the batch's source joins what
+            // the rule cites, so a retract takes it too.
+            let leaf = graph.leaves.get_mut(&target_id).expect("standing");
+            attach_evidence(&mut leaf.evidence, evidence);
             traces.push(format!("≡ duplicate of rule [{target_id}] (no change)"));
-            RuleEffect::Duplicate { id: target_id, text: standing_text }
+            RuleEffect::Duplicate { id: target_id, text: leaf.text.clone() }
         }
         (RuleRelation::Retract, true) => {
             let standing_text = graph.leaves[&target_id].text.clone();
@@ -1698,6 +1760,199 @@ mod tests {
     }
 
     #[test]
+    fn document_import_preserves_facts_dates_and_each_independent_rule() {
+        let documents = vec![Document {
+            name: "USER.md".into(),
+            text: "Lives in Lisbon. Opened North studio on 2024-01-02. Never use exclamation marks. Keep replies short.".into(),
+        }];
+        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
+        let mut graph = Graph::seed();
+        let prompt = render_harvest_prompt(&graph, &input, 1_000);
+        assert!(prompt.contains("# Documents to import"));
+        assert!(!prompt.contains("# Instructions to resolve"));
+        assert!(prompt.contains("EACH independent explicit standing instruction"));
+        let ops = parse_ops(&json!({
+            "states": [{"id": "city", "distillants": ["reg.home"], "text": "Lives in Lisbon", "relation": "novel", "target": "", "importance": 0.7, "aliases": ["Lisbon"]}],
+            "episodes": [{"text": "Opened North studio on 2024-01-02", "tags": [], "occurred_at": 1704153600}],
+            "rules": [
+                {"id": "punctuation", "text": "Never use exclamation marks", "relation": "novel", "target": ""},
+                {"id": "length", "text": "Keep replies short", "relation": "novel", "target": ""}
+            ]
+        }).to_string()).unwrap();
+        let applied = apply_harvest(&mut graph, ops, &input, 1_000);
+        assert_eq!(graph.leaves["city"].text, "Lives in Lisbon");
+        assert_eq!(graph.rules().len(), 2);
+        assert_eq!(applied.rules.len(), 2);
+        assert!(graph.episodes.iter().any(|episode| episode.occurred_at == Some(1704153600)));
+        assert!(graph.episodes.iter().any(|episode| episode.text.ends_with(&documents[0].text)));
+        assert!(resolve(&[], &applied).is_empty(), "imports have no Rule-only verdict");
+    }
+
+    #[test]
+    fn a_successful_empty_extraction_still_archives_the_import_source() {
+        let documents = vec![Document { name: "journal.md".into(), text: "A quiet day at North studio.".into() }];
+        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
+        let mut graph = Graph::seed();
+        apply_harvest(&mut graph, Vec::new(), &input, 1_000);
+        assert_eq!(graph.episodes.len(), 1);
+        assert_eq!(graph.episodes[0].text, "Imported saved memory from journal.md:\nA quiet day at North studio.");
+    }
+
+    fn strength_of(g: &Graph, id: &str) -> f32 {
+        belief::strength(g.leaves[id].kind.belief().expect("weighed leaf"))
+    }
+
+    #[test]
+    fn a_duplicate_only_import_is_forgotten_with_the_fact_it_restated() {
+        let mut g = Graph::seed();
+        apply_ops(&mut g, vec![state_op("city", "Lives in Lisbon", Relation::Novel, "")], 1_000);
+        let before = g.leaves["city"].clone();
+        let documents = vec![Document { name: "USER.md".into(), text: "Lives in Lisbon.".into() }];
+        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
+        // Two ops in one batch name the same fact: the archive is cited once.
+        let ops = vec![
+            state_op("city-again", "Lives in Lisbon", Relation::Duplicate, "city"),
+            state_op("city-thrice", "Lives in Lisbon", Relation::Duplicate, "city"),
+        ];
+        apply_harvest(&mut g, ops, &input, 2_000);
+        assert_eq!(g.episodes.len(), 1, "the source archive is the only episode");
+        let archive = g.episodes[0].id.clone();
+        let after = &g.leaves["city"];
+        assert_eq!(after.evidence, vec![archive.clone()], "a duplicate cites its source, once");
+        assert_eq!(after.text, before.text);
+        assert_eq!(after.updated_at, before.updated_at, "no clock moves on a duplicate");
+        assert_eq!(after.occurred_at, before.occurred_at);
+        assert_eq!(strength_of(&g, "city"), belief::strength(before.kind.belief().unwrap()), "no weight moves on a duplicate");
+        assert!(!g.leaves.contains_key("city-again") && !g.leaves.contains_key("city-thrice"));
+
+        apply_ops(&mut g, vec![Op::Forget { target: "city".into() }], 3_000);
+        assert!(!g.leaves.contains_key("city"));
+        assert!(g.episodes.is_empty(), "the archive was evidence for nothing else; it goes with the fact");
+    }
+
+    #[test]
+    fn a_duplicate_only_import_is_retracted_with_the_rule_it_restated() {
+        for relation in [RuleRelation::Duplicate, RuleRelation::Novel] {
+            let mut g = Graph::seed();
+            apply_ops(&mut g, vec![rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", "i-1")], 1_000);
+            let before = g.leaves["five-lines"].clone();
+            let documents = vec![Document { name: "USER.md".into(), text: "Keep replies to five lines.".into() }];
+            let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
+            let target = if relation == RuleRelation::Duplicate { "five-lines" } else { "" };
+            let applied = apply_harvest(&mut g, vec![rule_op("five-lines", "keep replies to five lines", relation, target, "")], &input, 2_000);
+            assert!(matches!(applied.rules[0].effect, RuleEffect::Duplicate { .. }), "{relation:?}: {:?}", applied.rules);
+            assert_eq!(g.episodes.len(), 1);
+            let archive = g.episodes[0].id.clone();
+            let after = &g.leaves["five-lines"];
+            assert_eq!(after.evidence, vec![archive], "{relation:?}: the duplicate cites its source");
+            assert_eq!(after.text, before.text);
+            assert_eq!(after.updated_at, before.updated_at, "{relation:?}: no clock moves");
+            assert_eq!(after.occurred_at, before.occurred_at);
+            assert_eq!(after.kind.history().len(), 0);
+
+            apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "")], 3_000);
+            assert!(!g.leaves.contains_key("five-lines"));
+            assert!(g.episodes.is_empty(), "{relation:?}: the archive goes with the retracted rule");
+        }
+    }
+
+    #[test]
+    fn an_archive_cited_by_a_surviving_leaf_outlives_the_forgotten_one() {
+        let mut g = Graph::seed();
+        apply_ops(
+            &mut g,
+            vec![
+                state_op("city", "Lives in Lisbon", Relation::Novel, ""),
+                rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", ""),
+            ],
+            1_000,
+        );
+        let documents = vec![Document { name: "USER.md".into(), text: "Lives in Lisbon. Keep replies to five lines.".into() }];
+        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
+        let ops = vec![
+            state_op("city-again", "Lives in Lisbon", Relation::Duplicate, "city"),
+            rule_op("five-lines", "keep replies to five lines", RuleRelation::Duplicate, "five-lines", ""),
+        ];
+        apply_harvest(&mut g, ops, &input, 2_000);
+        let archive = g.episodes[0].id.clone();
+        assert_eq!(g.leaves["city"].evidence, vec![archive.clone()]);
+        assert_eq!(g.leaves["five-lines"].evidence, vec![archive.clone()]);
+
+        apply_ops(&mut g, vec![Op::Forget { target: "city".into() }], 3_000);
+        assert!(g.episodes.iter().any(|e| e.id == archive), "the rule still cites the archive");
+        apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "")], 4_000);
+        assert!(g.episodes.is_empty(), "its last citer went; so does it");
+    }
+
+    #[test]
+    fn a_state_novel_collision_cites_the_batch_either_way() {
+        for text in ["Rent is $2,200/mo.", "Rent is $2,400/mo."] {
+            let mut g = Graph::seed();
+            apply_ops(&mut g, vec![state_op("rent", "Rent is $2,200/mo.", Relation::Novel, "")], 1_000);
+            let ep = Op::Episode { text: "talked rent".into(), tags: vec![], occurred_at: None };
+            apply_ops(&mut g, vec![ep, state_op("rent", text, Relation::Novel, "")], 2_000);
+            assert_eq!(g.leaves["rent"].evidence.len(), 1, "{text}: the collision cites the batch");
+            assert_eq!(g.leaves["rent"].text, text);
+        }
+    }
+
+    #[test]
+    fn a_missing_target_fallback_never_lands_on_an_occupied_id() {
+        let mut g = Graph::seed();
+        apply_ops(
+            &mut g,
+            vec![
+                Op::Episode { text: "seeded".into(), tags: vec![], occurred_at: None },
+                state_op("rent", "Rent is $2,200/mo.", Relation::Novel, ""),
+                Op::Disposition { id: "spend".into(), distillants: vec!["money-style".into()], text: "keeps spending tight".into(), dir: 1, note: "n".into(), importance: 0.5 },
+                rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", ""),
+            ],
+            1_000,
+        );
+        let snapshot = g.clone();
+        let applied = apply_ops(
+            &mut g,
+            vec![
+                // A state landing on a rule's id, and on a state's id.
+                state_op("five-lines", "five", Relation::Supports, "nope"),
+                state_op("rent", "Rent is $9/mo.", Relation::Supersedes, "nope"),
+                // A rule landing on a state's, a disposition's, and a rule's id.
+                rule_op("rent", "rent words", RuleRelation::Supersedes, "nope", ""),
+                rule_op("spend", "spend words", RuleRelation::Duplicate, "nope", ""),
+                rule_op("five-lines", "other words", RuleRelation::Supersedes, "nope", ""),
+                rule_op("five-lines", "other words", RuleRelation::Novel, "nope", ""),
+            ],
+            2_000,
+        );
+        assert!(applied.rules.is_empty(), "{:?}", applied.rules);
+        let refusals = applied.traces.iter().filter(|t| t.contains("would overwrite the")).count();
+        assert_eq!(refusals, 6, "{:?}", applied.traces);
+        for id in ["rent", "spend", "five-lines"] {
+            let (was, is) = (&snapshot.leaves[id], &g.leaves[id]);
+            assert_eq!((&is.text, is.species(), is.updated_at, &is.evidence), (&was.text, was.species(), was.updated_at, &was.evidence), "{id} untouched");
+            assert_eq!(is.kind.history().len(), was.kind.history().len(), "{id} untouched");
+        }
+        assert_eq!(g.leaves.len(), snapshot.leaves.len(), "nothing landed anywhere");
+
+        // With the target present, same-species supersession and duplicates
+        // resolve on the target as before.
+        let applied = apply_ops(
+            &mut g,
+            vec![
+                state_op("rent-new", "Rent is $2,400/mo.", Relation::Supersedes, "rent"),
+                rule_op("three-lines", "keep replies to three lines", RuleRelation::Supersedes, "five-lines", ""),
+                rule_op("again", "keep replies to three lines", RuleRelation::Duplicate, "five-lines", ""),
+            ],
+            3_000,
+        );
+        assert_eq!(g.leaves["rent"].text, "Rent is $2,400/mo.");
+        assert_eq!(g.leaves["five-lines"].text, "keep replies to three lines");
+        assert!(!g.leaves.contains_key("rent-new") && !g.leaves.contains_key("three-lines") && !g.leaves.contains_key("again"));
+        assert!(matches!(applied.rules[0].effect, RuleEffect::Superseded { .. }));
+        assert!(matches!(applied.rules[1].effect, RuleEffect::Duplicate { .. }));
+    }
+
+    #[test]
     fn instructions_resolve_in_order_and_unanswered_ones_are_not_rules() {
         let mut g = Graph::seed();
         let pending = vec![
@@ -1705,7 +1960,7 @@ mod tests {
             instruction("i-2", "actually, forget the length thing", "drop the length rule"),
             instruction("i-3", "book the usual table tonight", "one-off reservation"),
         ];
-        let prompt = build_user_message(&g, &HarvestInput { user_text: "…", assistant_text: "…", field_manual: "", instructions: &pending }, 1_000, DirectoryScope::Full);
+        let prompt = build_user_message(&g, &HarvestInput { instructions: &pending, ..HarvestInput::turn("…", "…") }, 1_000, DirectoryScope::Full);
         assert!(prompt.contains("# Instructions to resolve"), "{prompt}");
         assert!(prompt.contains("- [i-2] user said: \"actually, forget the length thing\" — read as: drop the length rule"), "{prompt}");
         assert!(render_harvest_prompt(&g, &HarvestInput::turn("…", "…"), 1_000).contains("16. Rules:"));
@@ -2023,6 +2278,7 @@ mod tests {
                 assistant_text: "",
                 field_manual: "- fetch against resy.com: plain fetch refused; use the paid search service",
                 instructions: &[],
+                documents: &[],
             },
             1_000,
             DirectoryScope::Full,

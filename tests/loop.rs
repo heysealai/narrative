@@ -169,7 +169,7 @@ fn an_instruction_becomes_a_pinned_rule_the_next_turn_reads() {
 
     let user1 = "from now on keep replies to five lines";
     let reply1 = agent::run_turn(&llm, &graph, &mut history, user1, None, t).unwrap();
-    let input = harvest::HarvestInput { user_text: user1, assistant_text: &reply1, field_manual: "", instructions: &pending };
+    let input = harvest::HarvestInput { instructions: &pending, ..harvest::HarvestInput::turn(user1, &reply1) };
     let applied = harvest::run(&llm, &mut graph, &input, t).unwrap();
     let resolved = harvest::resolve(&pending, &applied);
     assert_eq!(
