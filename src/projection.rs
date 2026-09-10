@@ -344,14 +344,44 @@ pub fn render_injection(graph: &Graph, p: &Projection, now: u64) -> Option<Strin
     Some(out)
 }
 
-fn walk_tree(
-    out: &mut String,
-    graph: &Graph,
-    distillant_id: &str,
-    depth: usize,
-    now: u64,
-    with_leaves: bool,
-) {
+/// One leaf as the pinned tier shows it: id and text, the wording a state
+/// replaced, the shakiness of a contested state, a disposition's axis — and
+/// no age, so the line is a pure function of the stored leaf. A rule never
+/// reaches here (crownless: no walk by parent finds one); the arm renders
+/// nothing rather than a line no walk can produce.
+fn render_leaf_pinned(out: &mut String, graph: &Graph, leaf_id: &str) {
+    let Some(l) = graph.leaves.get(leaf_id) else { return };
+    match &l.kind {
+        LeafKind::State(state) => {
+            let _ = write!(out, "- [{}] {}", l.id, l.text);
+            if let Some(last) = state.history.last() {
+                let _ = write!(out, " (was: {})", last.value);
+            }
+            let s = belief::strength(&state.belief);
+            if s < 0.45 {
+                let _ = write!(
+                    out,
+                    " [shaky: {} for / {} against]",
+                    state.belief.support, state.belief.contradict
+                );
+            }
+            out.push('\n');
+        }
+        LeafKind::Disposition(d) => {
+            let _ = writeln!(
+                out,
+                "- [{}] {} (axis {:+.2}, {} observations)",
+                l.id,
+                l.text,
+                d.axis,
+                d.nudges.len()
+            );
+        }
+        LeafKind::Rule(_) => {}
+    }
+}
+
+fn walk_tree(out: &mut String, graph: &Graph, distillant_id: &str, depth: usize, with_leaves: bool) {
     let Some(m) = graph.distillants.get(distillant_id) else { return };
     let indent = "  ".repeat(depth);
     let n_leaves = graph.leaves_under(distillant_id).len();
@@ -365,7 +395,7 @@ fn walk_tree(
         leaves.sort_by(|a, b| a.id.cmp(&b.id));
         for l in leaves {
             let mut line = String::new();
-            render_leaf_line(&mut line, graph, &l.id, now);
+            render_leaf_pinned(&mut line, graph, &l.id);
             for ln in line.lines() {
                 let _ = writeln!(out, "{indent}  {ln}");
             }
@@ -374,30 +404,32 @@ fn walk_tree(
     let mut children = graph.child_distillants(distillant_id);
     children.sort_by(|a, b| a.id.cmp(&b.id));
     for c in children {
-        walk_tree(out, graph, &c.id, depth + 1, now, with_leaves);
+        walk_tree(out, graph, &c.id, depth + 1, with_leaves);
     }
 }
 
-/// Pinned tier: the whole profile, lines and leaves. Small by
-/// construction; lives in the cacheable per-user system block.
-pub fn render_profile(graph: &Graph, now: u64) -> String {
+/// Pinned tier: the whole profile, lines and leaves, without ages — a pure
+/// function of the graph, so the block moves only when the graph does.
+/// Small by construction; lives in the cacheable per-user system block.
+pub fn render_profile(graph: &Graph) -> String {
     let mut out = String::new();
     let mut roots = graph.roots(Tree::Profile);
     roots.sort_by(|a, b| a.id.cmp(&b.id));
     for r in roots {
-        walk_tree(&mut out, graph, &r.id, 0, now, true);
+        walk_tree(&mut out, graph, &r.id, 0, true);
     }
     out
 }
 
 /// Registry skeleton: the map the model reads to decide where to descend.
-/// Labels + lines + leaf counts — never leaf bodies.
-pub fn render_registry_skeleton(graph: &Graph, now: u64) -> String {
+/// Labels + lines + leaf counts — never leaf bodies, never ages: pinned
+/// beside the profile, and byte-stable between commits like it.
+pub fn render_registry_skeleton(graph: &Graph) -> String {
     let mut out = String::new();
     let mut roots = graph.roots(Tree::Registry);
     roots.sort_by(|a, b| a.id.cmp(&b.id));
     for r in roots {
-        walk_tree(&mut out, graph, &r.id, 0, now, false);
+        walk_tree(&mut out, graph, &r.id, 0, false);
     }
     out
 }
@@ -459,7 +491,7 @@ pub fn render_open(graph: &Graph, distillant_id: &str, now: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Graph, Leaf, Distillant, Tree};
+    use crate::model::{Distillant, Graph, Leaf, Supersession, Tree, PROFILE_APEX};
 
     fn fixture() -> Graph {
         let mut g = Graph::seed();
@@ -578,10 +610,28 @@ mod tests {
     #[test]
     fn skeleton_hides_leaf_bodies() {
         let g = fixture();
-        let s = render_registry_skeleton(&g, 2_000);
+        let s = render_registry_skeleton(&g);
         assert!(s.contains("money/rent"));
         assert!(s.contains("[8 leaves]"));
         assert!(!s.contains("rent fact number"), "skeleton must not leak leaf bodies");
+    }
+
+    #[test]
+    fn the_pinned_tier_carries_no_ages_and_keeps_superseded_wording() {
+        let mut g = Graph::seed();
+        let day = 86_400;
+        let mut leaf = Leaf::state("home-city".into(), "lives in Lisbon".into(), vec![PROFILE_APEX.into()], 0.9, day);
+        if let LeafKind::State(state) = &mut leaf.kind {
+            state.history.push(Supersession { value: "lives in Porto".into(), superseded_at: day });
+        }
+        g.leaves.insert(leaf.id.clone(), leaf);
+        let profile = render_profile(&g);
+        assert!(profile.contains("- [home-city] lives in Lisbon (was: lives in Porto)"), "{profile}");
+        assert!(!profile.contains("ago") && !profile.contains("today"), "no age in the pinned profile: {profile}");
+        assert!(!profile.contains("noted") && !profile.contains("changed"), "{profile}");
+        let opened = render_open(&g, PROFILE_APEX, 10 * day);
+        assert!(opened.contains("(changed 9d ago; was: lives in Porto)"), "the open keeps its ages: {opened}");
+        assert_eq!(render_registry_skeleton(&g), render_registry_skeleton(&g));
     }
 
     #[test]
@@ -726,7 +776,7 @@ mod tests {
         let opened = render_open(&g, RULES, 20 * day);
         assert!(opened.contains("- [ask-first] ask before any spend over $20 (given 8d ago)"), "{opened}");
         assert!(opened.contains("- [five-lines] keep replies to five lines (changed 12d ago; was: keep replies to three lines)"), "{opened}");
-        assert!(!render_profile(&g, 20 * day).contains("five-lines"), "a rule is not part of the profile");
+        assert!(!render_profile(&g).contains("five-lines"), "a rule is not part of the profile");
         assert!(project(&g, "five lines please", 20 * day).opened.is_empty(), "no routing reaches a rule");
         assert!(render_open(&g, "nope", 1).contains(RULES), "the miss names the reserved id");
     }

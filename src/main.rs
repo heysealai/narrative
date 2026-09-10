@@ -171,8 +171,8 @@ fn main() -> Result<()> {
             Some(rules) => print!("{rules}"),
             None => println!("(no standing instructions yet)"),
         },
-        "profile" => print!("{}", projection::render_profile(&graph, now)),
-        "map" => print!("{}", projection::render_registry_skeleton(&graph, now)),
+        "profile" => print!("{}", projection::render_profile(&graph)),
+        "map" => print!("{}", projection::render_registry_skeleton(&graph)),
         "stream" => {
             let n: usize = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(10);
             for e in graph.episodes.iter().rev().take(n).rev() {

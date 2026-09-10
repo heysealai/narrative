@@ -37,13 +37,13 @@ pub fn open_memory_tool() -> ToolDef {
     }
 }
 
-pub fn build_system(graph: &Graph, now: u64) -> String {
+pub fn build_system(graph: &Graph) -> String {
     let rules = match projection::render_rules(graph) {
         Some(rules) => format!("# Standing instructions\n{rules}\n"),
         None => String::new(),
     };
-    let profile = projection::render_profile(graph, now);
-    let skeleton = projection::render_registry_skeleton(graph, now);
+    let profile = projection::render_profile(graph);
+    let skeleton = projection::render_registry_skeleton(graph);
     format!(
         "You are Narrative, a personal assistant with a real long-term memory of your user. \
          You are concise, warm, and concrete. You never mention the memory system, the trees, \
@@ -84,7 +84,7 @@ pub fn run_turn(
 
     for _ in 0..MAX_TOOL_ROUNDS {
         let req = ChatRequest {
-            system: build_system(graph, now),
+            system: build_system(graph),
             messages: history.clone(),
             tools: vec![open_memory_tool()],
             output_schema: None,

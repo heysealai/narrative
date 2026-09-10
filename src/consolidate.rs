@@ -1091,7 +1091,7 @@ mod tests {
         let raw = r#"{"line": "Careful with every euro of their own.", "routing": [], "merge_into": ""}"#;
         apply_redistilled(&mut g, PROFILE_APEX, raw, 3_000).unwrap();
         assert_eq!(due(&g), None, "the portrait absorbed the axes");
-        assert!(crate::projection::render_profile(&g, 3_000).starts_with("- character — Careful with every euro of their own.\n  - communication"), "{}", crate::projection::render_profile(&g, 3_000));
+        assert!(crate::projection::render_profile(&g).starts_with("- character — Careful with every euro of their own.\n  - communication"), "{}", crate::projection::render_profile(&g));
     }
 
     #[test]

@@ -95,12 +95,12 @@ impl Sim {
                     print!("{rules}");
                     println!("{BOLD}# Profile{RESET}");
                 }
-                print!("{}", projection::render_profile(&self.graph, now));
+                print!("{}", projection::render_profile(&self.graph));
             }
-            "/map" => print!("{}", projection::render_registry_skeleton(&self.graph, now)),
+            "/map" => print!("{}", projection::render_registry_skeleton(&self.graph)),
             "/tree" => {
                 println!("{BOLD}# Registry{RESET}");
-                print!("{}", projection::render_registry_skeleton(&self.graph, now));
+                print!("{}", projection::render_registry_skeleton(&self.graph));
                 for id in self.graph.distillants.keys().cloned().collect::<Vec<_>>() {
                     let leaves = self.graph.leaves_under(&id);
                     if !leaves.is_empty() {
@@ -108,7 +108,7 @@ impl Sim {
                     }
                 }
                 println!("{BOLD}# Profile{RESET}");
-                print!("{}", projection::render_profile(&self.graph, now));
+                print!("{}", projection::render_profile(&self.graph));
             }
             "/open" => print!("{}", projection::render_open(&self.graph, arg, now)),
             "/stream" => {

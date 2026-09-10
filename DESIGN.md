@@ -88,7 +88,9 @@ Both trees are DAGs — a leaf may hang under multiple distillants ("rent latene
 - **Profile = pinned tier.** Small, slow-changing, relevant to almost every turn (how to
   talk to this person, how cautious to be). The whole profile rides inline always — and
   because it changes rarely, it lives in the *cacheable* per-user system block without
-  busting prompt cache. The tree's single root, `character`, carries the whole-person
+  busting prompt cache: the pinned renders (rules, profile, memory map) carry no ages, so
+  they are pure functions of the graph and move only when it does; ages belong to the
+  opened branch. The tree's single root, `character`, carries the whole-person
   estimate consolidation distills from the axis lines beneath it — the pinned block
   opens with who this person is, then how they tend.
 - **Registry + stream = retrieved tier.** Big, fast-growing, situationally relevant.
@@ -318,9 +320,9 @@ machinery (background subagents). Any host needs equivalents:
 1. Finished-turn transcripts delivered to the harvester.
 2. An eviction signal + the about-to-evict chunk (for distill-before-forget).
 3. A pre-send hook on outgoing messages (projection match + leaf injection).
-4. An inline slot for the pinned rules and profile (cache-friendly; the rules render
-   with no ages, so the block only moves when a rule does) and a per-turn slot for
-   projected leaves (cache-safe).
+4. An inline slot for the pinned rules, profile and memory map (cache-friendly; the
+   pinned renders carry no ages, so the block only moves when the graph does) and a
+   per-turn slot for projected leaves (cache-safe).
 5. An LLM channel for harvester/consolidation calls, off the interactive turn.
 6. An `open(path)` tool exposed to the main model for BFS descent.
 

@@ -177,18 +177,18 @@ fn an_instruction_becomes_a_pinned_rule_the_next_turn_reads() {
         vec![("i-1".to_string(), harvest::Resolution::Rule(harvest::RuleEffect::Kept { id: "five-lines".into(), text: "keep replies to five lines".into() }))]
     );
 
-    let system = agent::build_system(&graph, t + 60);
+    let system = agent::build_system(&graph);
     let rules_at = system.find("# Standing instructions").expect("rules ride pinned");
     let profile_at = system.find("# Profile").expect("profile rides pinned");
     assert!(rules_at < profile_at, "rules above the profile: {system}");
     assert!(system.contains("- [five-lines] keep replies to five lines"), "{system}");
-    assert_eq!(agent::build_system(&graph, t + 60 * 60 * 24 * 40), system, "the pinned block does not move with time");
+    assert_eq!(agent::build_system(&graph), system, "the pinned block is a pure function of the graph");
 
     let user2 = "make that three lines";
     let reply2 = agent::run_turn(&llm, &graph, &mut history, user2, None, t + 60).unwrap();
     let applied = harvest::run(&llm, &mut graph, &harvest::HarvestInput::turn(user2, &reply2), t + 60).unwrap();
     assert!(matches!(applied.rules[0].effect, harvest::RuleEffect::Superseded { .. }), "{:?}", applied.rules);
-    let system = agent::build_system(&graph, t + 120);
+    let system = agent::build_system(&graph);
     assert!(system.contains("- [five-lines] keep replies to three lines (was: keep replies to five lines)"), "{system}");
     assert_eq!(graph.rules().len(), 1, "one rule, reworded");
     assert!(projection::project(&graph, "five lines?", t + 120).opened.is_empty(), "no routing reaches a rule");
