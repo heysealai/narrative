@@ -1203,19 +1203,19 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                         traces.push(format!("⚠ state op targets the {} [{target_id}]; skipped", kind.species().name()));
                         continue;
                     };
-                    let event_at = occurred_at.unwrap_or(now);
                     match relation {
-                        Relation::Novel => {
-                            // Id collision with different text: states switch.
-                            if *leaf_text != text {
-                                belief::supersede(leaf_text, state, text.clone(), event_at, now);
-                                *leaf_occurred_at = occurred_at;
-                                *updated_at = now;
-                                traces.push(format!("⇄ superseded [{}] → {}", target_id, text));
-                            } else {
-                                belief::support(&mut state.belief, now);
-                                traces.push(format!("↑ re-affirmed [{}]", target_id));
-                            }
+                        Relation::Novel if *leaf_text == text => {
+                            belief::support(&mut state.belief, now);
+                            traces.push(format!("↑ re-affirmed [{}]", target_id));
+                        }
+                        // Novel on an occupied id with other words is a
+                        // supersession the harvester did not name: states switch.
+                        Relation::Novel | Relation::Supersedes => {
+                            let old = std::mem::replace(leaf_text, text.clone());
+                            belief::supersede(state, old, occurred_at.unwrap_or(now), now);
+                            *leaf_occurred_at = occurred_at;
+                            *updated_at = now;
+                            traces.push(format!("⇄ superseded [{}] → {}", target_id, text));
                         }
                         Relation::Duplicate => {
                             // No weight, no wording, no clock moves — but the
@@ -1238,12 +1238,6 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                                 "↓ contradicts [{}] (strength now {:.2})",
                                 target_id, s
                             ));
-                        }
-                        Relation::Supersedes => {
-                            belief::supersede(leaf_text, state, text.clone(), event_at, now);
-                            *leaf_occurred_at = occurred_at;
-                            *updated_at = now;
-                            traces.push(format!("⇄ superseded [{}] → {}", target_id, text));
                         }
                     }
                     // Every accepted relation cites the batch: what a leaf
@@ -1549,20 +1543,14 @@ fn apply_reparent(graph: &mut Graph, distillant_id: String, parents: Vec<String>
     traces.push(format!("→ reparented {distillant_id} under {dest}"));
 }
 
-/// Which pair of weighed leaves a merge combines. A rule is never merged:
-/// two rules saying the same thing are one supersession away from one.
-enum MergePair {
-    States,
-    Dispositions,
-}
-
-fn merge_pair(from: &Leaf, into: &Leaf) -> Option<MergePair> {
-    match (&from.kind, &into.kind) {
-        (LeafKind::State(_), LeafKind::State(_)) => Some(MergePair::States),
-        (LeafKind::Disposition(_), LeafKind::Disposition(_)) => Some(MergePair::Dispositions),
-        (LeafKind::Rule(_), _) | (_, LeafKind::Rule(_)) => None,
-        (LeafKind::State(_), LeafKind::Disposition(_)) | (LeafKind::Disposition(_), LeafKind::State(_)) => None,
-    }
+/// A merge combines two weighed leaves of one species. A rule is never
+/// merged: two rules saying the same thing are one supersession away from
+/// one.
+fn mergeable(from: &Leaf, into: &Leaf) -> bool {
+    matches!(
+        (&from.kind, &into.kind),
+        (LeafKind::State(_), LeafKind::State(_)) | (LeafKind::Disposition(_), LeafKind::Disposition(_))
+    )
 }
 
 fn merge_weight(dst_belief: &mut Belief, dst_salience: &mut Salience, src_belief: &Belief, src_salience: &Salience) {
@@ -1575,30 +1563,30 @@ fn merge_weight(dst_belief: &mut Belief, dst_salience: &mut Salience, src_belief
 }
 
 fn apply_merge_leaf(graph: &mut Graph, from: String, into: String, now: u64, traces: &mut Vec<String>) {
-    let pair = match (graph.leaves.get(&from), graph.leaves.get(&into)) {
-        (Some(src), Some(dst)) if from != into => merge_pair(src, dst),
-        _ => None,
+    let valid = match (graph.leaves.get(&from), graph.leaves.get(&into)) {
+        (Some(src), Some(dst)) => from != into && mergeable(src, dst),
+        _ => false,
     };
-    let Some(pair) = pair else {
+    if !valid {
         traces.push(format!("⚠ merge_leaves [{from}] → [{into}] invalid (missing, same id, a rule, or species mismatch); skipped"));
         return;
-    };
+    }
     let src = graph.leaves.remove(&from).expect("checked above");
     let dst = graph.leaves.get_mut(&into).expect("checked above");
-    match (pair, &mut dst.kind, src.kind) {
-        (MergePair::States, LeafKind::State(d), LeafKind::State(s)) => {
+    match (&mut dst.kind, src.kind) {
+        (LeafKind::State(d), LeafKind::State(s)) => {
             merge_weight(&mut d.belief, &mut d.salience, &s.belief, &s.salience);
             d.history.extend(s.history);
             d.history.sort_by_key(|h| h.superseded_at);
         }
-        (MergePair::Dispositions, LeafKind::Disposition(d), LeafKind::Disposition(s)) => {
+        (LeafKind::Disposition(d), LeafKind::Disposition(s)) => {
             merge_weight(&mut d.belief, &mut d.salience, &s.belief, &s.salience);
             // Replay the combined trajectory so the axis stays derived, not blended.
             d.nudges.extend(s.nudges);
             d.nudges.sort_by_key(|n| n.at);
             d.axis = d.nudges.iter().fold(0.0, |a, n| belief::nudge_axis(a, n.dir));
         }
-        (MergePair::States, _, _) | (MergePair::Dispositions, _, _) => unreachable!("the pair was read from these kinds"),
+        _ => unreachable!("mergeable read these kinds"),
     }
     for e in src.evidence {
         if !dst.evidence.contains(&e) {

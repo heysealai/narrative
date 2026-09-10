@@ -1162,7 +1162,8 @@ mod tests {
         {
             let lease = g.leaves.get_mut("lease").unwrap();
             let crate::model::LeafKind::State(state) = &mut lease.kind else { panic!() };
-            crate::belief::supersede(&mut lease.text, state, "lease ended".into(), 2_100, 2_100);
+            let old = std::mem::replace(&mut lease.text, "lease ended".into());
+            crate::belief::supersede(state, old, 2_100, 2_100);
         }
         assert_eq!(drift(&g, "money"), 2 * DRIFT_AGAINST, "a supersession counts too");
         assert_eq!(

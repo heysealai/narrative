@@ -1108,6 +1108,22 @@ mod tests {
     }
 
     #[test]
+    fn species_name_is_the_stored_tag() {
+        // `Species::name` is written by hand; the tag on `LeafKind` and the
+        // encoding of `Species` are serde's. All three must agree.
+        let leaves = [
+            Leaf::state("s".into(), "a fact".into(), vec![], 0.5, 1),
+            Leaf::disposition("d".into(), "an axis".into(), vec![], 0.5, 1),
+            Leaf::rule("r".into(), "an instruction".into(), None, 1),
+        ];
+        for leaf in leaves {
+            let name = leaf.species().name();
+            assert_eq!(serde_json::to_value(&leaf).unwrap()["species"], name);
+            assert_eq!(serde_json::to_value(leaf.species()).unwrap(), name);
+        }
+    }
+
+    #[test]
     fn a_rule_carries_no_weight_and_hangs_under_nothing() {
         let rule = Leaf::rule("five-lines".into(), "keep replies to five lines".into(), Some("i-1".into()), 7);
         assert!(rule.parents.is_empty());

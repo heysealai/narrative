@@ -60,13 +60,13 @@ pub fn apply_nudge(d: &mut DispositionKind, dir: i8, note: String, at: u64) -> b
     flip
 }
 
-/// States switch, they don't drift: the old value becomes history
-/// (and the history of change is some of the most informative memory).
-/// `event_at` is when the change actually happened (story time for backlog
-/// imports); `now` is write time, which the arithmetic keys on.
-pub fn supersede(text: &mut String, state: &mut StateKind, new_text: String, event_at: u64, now: u64) {
-    let old = std::mem::replace(text, new_text);
-    state.history.push(Supersession { value: old, superseded_at: event_at });
+/// States switch, they don't drift: the value a state just gave up
+/// becomes history (and the history of change is some of the most
+/// informative memory). The caller swaps the leaf's text and hands the old
+/// words here; `event_at` is when the change actually happened (story time
+/// for backlog imports); `now` is write time, which the arithmetic keys on.
+pub fn supersede(state: &mut StateKind, old_text: String, event_at: u64, now: u64) {
+    state.history.push(Supersession { value: old_text, superseded_at: event_at });
     // The fresh belief keeps the against-stamp: the VALUE moved, and any
     // line written over the old value is now suspect regardless of
     // how believed the new one is.
@@ -139,27 +139,26 @@ mod tests {
         assert_eq!(flips, 1, "the flip should be reported exactly once");
     }
 
-    fn state() -> (String, StateKind) {
+    fn state() -> StateKind {
         let leaf = Leaf::state("t".into(), "text".into(), vec!["money".into()], 0.5, 1_000);
         let LeafKind::State(state) = leaf.kind else { unreachable!() };
-        (leaf.text, state)
+        state
     }
 
     #[test]
     fn supersede_keeps_history_and_resets_belief() {
-        let (mut text, mut state) = state();
+        let mut state = state();
         state.belief.support = 7;
-        supersede(&mut text, &mut state, "rent is $2,400/mo".into(), 2_000, 2_000);
-        assert_eq!(text, "rent is $2,400/mo");
+        supersede(&mut state, "rent is $2,200/mo".into(), 2_000, 2_000);
         assert_eq!(state.history.len(), 1);
-        assert_eq!(state.history[0].value, "text");
+        assert_eq!(state.history[0].value, "rent is $2,200/mo");
         assert_eq!(state.belief.support, 1);
     }
 
     #[test]
     fn supersede_event_time_lands_in_history_not_arithmetic() {
-        let (mut text, mut state) = state();
-        supersede(&mut text, &mut state, "moved to the cave".into(), 500, 9_000);
+        let mut state = state();
+        supersede(&mut state, "lived on the shore".into(), 500, 9_000);
         assert_eq!(state.history[0].superseded_at, 500, "display time is event time");
         assert_eq!(state.belief.last_event_at, 9_000, "the arithmetic keys on write time");
     }
