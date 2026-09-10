@@ -187,7 +187,14 @@ fn redistill_body(graph: &Graph, distillant_id: &str) -> Option<String> {
         body.push_str("(none)\n");
     }
     for l in &leaves {
-        let _ = writeln!(body, "- [{}] {} (importance {:.1})", l.id, l.text, l.salience.importance);
+        match l.kind.salience() {
+            Some(s) => {
+                let _ = writeln!(body, "- [{}] {} (importance {:.1})", l.id, l.text, s.importance);
+            }
+            None => {
+                let _ = writeln!(body, "- [{}] {}", l.id, l.text);
+            }
+        }
     }
     let recent: Vec<String> = graph
         .episodes
@@ -274,7 +281,8 @@ pub fn apply_redistilled(
             graph,
             vec![Op::MergeDistillant { from: distillant_id.to_string(), into }],
             now,
-        );
+        )
+        .traces;
         let merged = !graph.distillants.contains_key(distillant_id);
         if merged {
             return Ok(traces);
@@ -314,7 +322,7 @@ fn apply_redistilled_in_place(
         ops.push(Op::MergeLeaf { from: mg.from, into: mg.into });
     }
     if !ops.is_empty() {
-        traces.extend(harvest::apply_ops(graph, ops, now));
+        traces.extend(harvest::apply_ops(graph, ops, now).traces);
     }
 
     if let Some(m) = graph.distillants.get_mut(distillant_id)
@@ -420,7 +428,7 @@ pub fn drift(graph: &Graph, distillant_id: &str) -> u32 {
     let Some(m) = graph.distillants.get(distillant_id) else { return 0 };
     let t = m.consolidated_at;
     let leaves = graph.leaves_under(distillant_id);
-    let against = leaves.iter().filter(|l| l.belief.last_against_at > t).count() as u32;
+    let against = leaves.iter().filter(|l| l.kind.belief().is_some_and(|b| b.last_against_at > t)).count() as u32;
     let child_lines = graph
         .child_distillants(distillant_id)
         .iter()
@@ -676,12 +684,16 @@ pub fn stats(graph: &Graph) -> String {
     let mut out = String::new();
     let n_reg = graph.distillants.values().filter(|m| m.tree == Tree::Registry).count();
     let n_prof = graph.distillants.values().filter(|m| m.tree == Tree::Profile).count();
+    let n_rules = graph.rules().len();
+    let n_withdrawn = graph.withdrawn_rules().len();
     let _ = writeln!(
         out,
-        "distillants: {} registry / {} profile · leaves: {} · episodes: {}",
+        "distillants: {} registry / {} profile · leaves: {} ({} rules, {} withdrawn) · episodes: {}",
         n_reg,
         n_prof,
-        graph.leaves.len(),
+        graph.leaves.len() - n_rules - n_withdrawn,
+        n_rules,
+        n_withdrawn,
         graph.episodes.len()
     );
 
@@ -741,6 +753,7 @@ pub fn stats(graph: &Graph) -> String {
     let orphans: Vec<&str> = graph
         .leaves
         .values()
+        .filter(|l| !l.is_rule())
         .filter(|l| l.parents.iter().all(|p| !graph.distillants.contains_key(p)))
         .map(|l| l.id.as_str())
         .collect();
@@ -774,18 +787,12 @@ pub fn stats(graph: &Graph) -> String {
 mod tests {
     use super::*;
     use crate::llm::MockLlm;
-    use crate::model::{Graph, Leaf, Species};
+    use crate::model::{Graph, Leaf};
 
     #[test]
     fn redistill_applies_model_output() {
         let mut g = Graph::seed();
-        let l = Leaf::new(
-            "rent-amount".into(),
-            Species::State,
-            "Rent is $2,200.".into(),
-            vec!["money".into()],
-            1_000,
-        );
+        let l = Leaf::state("rent-amount".into(), "Rent is $2,200.".into(), vec!["money".into()], 0.5, 1_000);
         g.leaves.insert(l.id.clone(), l);
         g.distillants.get_mut("money").unwrap().misc_count = 3;
 
@@ -805,13 +812,7 @@ mod tests {
     #[test]
     fn redistill_prompt_and_apply_are_the_keyless_pair() {
         let mut g = Graph::seed();
-        let l = Leaf::new(
-            "rent-amount".into(),
-            Species::State,
-            "Rent is $2,200.".into(),
-            vec!["money".into()],
-            1_000,
-        );
+        let l = Leaf::state("rent-amount".into(), "Rent is $2,200.".into(), vec!["money".into()], 0.5, 1_000);
         g.leaves.insert(l.id.clone(), l);
 
         let p = render_redistill_prompt(&g, "money").unwrap();
@@ -868,7 +869,7 @@ mod tests {
             ("rent-a", "Rent is $2,200/mo."),
             ("rent-b", "Rent: $2,200 monthly."),
         ] {
-            let l = Leaf::new(id.into(), Species::State, text.into(), vec!["life".into()], 1_000);
+            let l = Leaf::state(id.into(), text.into(), vec!["life".into()], 0.5, 1_000);
             g.leaves.insert(l.id.clone(), l);
         }
         let out = json!({
@@ -895,7 +896,7 @@ mod tests {
         assert_eq!(g.leaves["island-goats"].parents, vec!["life/island/animals"]);
         assert_eq!(g.leaves["island-pets"].parents, vec!["life/island/animals"]);
         assert!(!g.leaves.contains_key("rent-b"), "duplicate absorbed");
-        assert_eq!(g.leaves["rent-a"].belief.support, 2);
+        assert_eq!(g.leaves["rent-a"].kind.belief().unwrap().support, 2);
         assert!(g.distillants["life"].line.contains("their own distillant"));
         assert!(traces.iter().any(|t| t.contains("✚ distillant life/island/animals")));
         assert!(traces.iter().any(|t| t.contains("moved [island-goats]")));
@@ -1032,15 +1033,19 @@ mod tests {
     }
 
     fn leaf_under(g: &mut Graph, id: &str, parent: &str, at: u64) {
-        let l = Leaf::new(id.into(), Species::State, format!("fact {id}"), vec![parent.into()], at);
+        let l = Leaf::state(id.into(), format!("fact {id}"), vec![parent.into()], 0.5, at);
         g.leaves.insert(l.id.clone(), l);
+    }
+
+    fn belief_of<'g>(g: &'g mut Graph, id: &str) -> &'g mut crate::model::Belief {
+        g.leaves.get_mut(id).unwrap().kind.belief_mut().expect("a weighed leaf")
     }
 
     #[test]
     fn a_seeded_axis_comes_due_on_its_first_material() {
         let mut g = Graph::seed();
         assert_eq!(due(&g), None, "a fresh seed has nothing to judge");
-        let l = Leaf::new("checks-balance".into(), Species::Disposition, "checks the balance before any spend".into(), vec!["money-style".into()], 1_000);
+        let l = Leaf::disposition("checks-balance".into(), "checks the balance before any spend".into(), vec!["money-style".into()], 0.5, 1_000);
         g.leaves.insert(l.id.clone(), l);
         assert_eq!(pressure(&g, "money-style"), BARE_PRESSURE, "an unjudged axis is bare pressure");
         assert_eq!(due(&g).as_deref(), Some("money-style"), "the axis is due the moment a leaf lands");
@@ -1066,7 +1071,7 @@ mod tests {
 
         // A distillant that carries leaves of its own weighs one changed
         // child as the fraction of the evidence it is.
-        let l = Leaf::new("own".into(), Species::State, "a fact of its own".into(), vec!["money".into()], 1_000);
+        let l = Leaf::state("own".into(), "a fact of its own".into(), vec!["money".into()], 0.5, 1_000);
         g.leaves.insert(l.id.clone(), l);
         bare_child(&mut g, "money/rent", "money");
         g.distillants.get_mut("money").unwrap().consolidated_at = 1_000;
@@ -1077,7 +1082,7 @@ mod tests {
     #[test]
     fn the_apex_is_due_once_an_axis_line_exists_and_is_distilled_from_the_axes() {
         let mut g = Graph::seed();
-        let l = Leaf::new("checks-balance".into(), Species::Disposition, "checks the balance before any spend".into(), vec!["money-style".into()], 1_000);
+        let l = Leaf::disposition("checks-balance".into(), "checks the balance before any spend".into(), vec!["money-style".into()], 0.5, 1_000);
         g.leaves.insert(l.id.clone(), l);
         let raw = r#"{"line": "Checks the balance before every spend.", "routing": [], "merge_into": ""}"#;
         apply_redistilled(&mut g, "money-style", raw, 2_000).unwrap();
@@ -1088,7 +1093,7 @@ mod tests {
         let raw = r#"{"line": "Careful with every euro of their own.", "routing": [], "merge_into": ""}"#;
         apply_redistilled(&mut g, PROFILE_APEX, raw, 3_000).unwrap();
         assert_eq!(due(&g), None, "the portrait absorbed the axes");
-        assert!(crate::projection::render_profile(&g, 3_000).starts_with("- character — Careful with every euro of their own.\n  - communication"), "{}", crate::projection::render_profile(&g, 3_000));
+        assert!(crate::projection::render_profile(&g).starts_with("- character — Careful with every euro of their own.\n  - communication"), "{}", crate::projection::render_profile(&g));
     }
 
     #[test]
@@ -1154,14 +1159,14 @@ mod tests {
         leaf_under(&mut g, "lease", "money", 1_000);
         assert_eq!(drift(&g, "money"), 0, "quiet leaves are not drift");
 
-        crate::belief::contradict(&mut g.leaves.get_mut("rent").unwrap().belief, 2_000);
+        crate::belief::contradict(belief_of(&mut g, "rent"), 2_000);
         assert_eq!(drift(&g, "money"), DRIFT_AGAINST, "a contradiction since the pass counts");
-        crate::belief::supersede(
-            g.leaves.get_mut("lease").unwrap(),
-            "lease ended".into(),
-            2_100,
-            2_100,
-        );
+        {
+            let lease = g.leaves.get_mut("lease").unwrap();
+            let crate::model::LeafKind::State(state) = &mut lease.kind else { panic!() };
+            let old = std::mem::replace(&mut lease.text, "lease ended".into());
+            crate::belief::supersede(state, old, 2_100, 2_100);
+        }
         assert_eq!(drift(&g, "money"), 2 * DRIFT_AGAINST, "a supersession counts too");
         assert_eq!(
             pressure(&g, "money"),
@@ -1192,7 +1197,7 @@ mod tests {
     fn events_before_the_pass_are_not_drift() {
         let mut g = Graph::seed();
         leaf_under(&mut g, "rent", "money", 1_000);
-        crate::belief::contradict(&mut g.leaves.get_mut("rent").unwrap().belief, 1_200);
+        crate::belief::contradict(belief_of(&mut g, "rent"), 1_200);
         g.distillants.get_mut("money").unwrap().consolidated_at = 1_500;
         assert_eq!(drift(&g, "money"), 0, "the line was written knowing this");
     }
@@ -1223,7 +1228,7 @@ mod tests {
         g.distillants.get_mut("life").unwrap().consolidated_at = 1_500;
         for id in ["a", "b"] {
             leaf_under(&mut g, id, "life", 1_000);
-            g.leaves.get_mut(id).unwrap().belief.last_against_at = 2_000;
+            belief_of(&mut g, id).last_against_at = 2_000;
         }
         assert_eq!(due(&g), Some("life".into()), "pure drift re-arms the trigger");
 
@@ -1232,7 +1237,7 @@ mod tests {
         mid_under(&mut g, "life/island", "life", 1_500);
         for id in ["c", "d"] {
             leaf_under(&mut g, id, "life/island", 1_000);
-            g.leaves.get_mut(id).unwrap().belief.last_against_at = 2_000;
+            belief_of(&mut g, id).last_against_at = 2_000;
         }
         assert_eq!(due(&g), Some("life/island".into()), "children before parents");
     }
@@ -1273,8 +1278,7 @@ mod tests {
     fn stream_fold_distills_oldest_batch_with_model_text() {
         let mut g = written_seed();
         let first = g.push_episode("sold Xury".into(), vec![], 1, None);
-        let mut l =
-            Leaf::new("xury".into(), Species::State, "Xury sold.".into(), vec!["people".into()], 1);
+        let mut l = Leaf::state("xury".into(), "Xury sold.".into(), vec!["people".into()], 0.5, 1);
         l.evidence.push(first.clone());
         g.leaves.insert(l.id.clone(), l);
         for i in 0..STREAM_CAP {
