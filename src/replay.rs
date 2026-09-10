@@ -16,7 +16,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::harvest::{self, DirectoryScope, Neighborhood, Op, Relation};
+use crate::harvest::{self, DirectoryScope, HarvestInput, Neighborhood, Op, Relation, RuleRelation};
 use crate::llm::{ChatRequest, Llm, Usage};
 use crate::model::Graph;
 use crate::routing::RoutingTable;
@@ -52,6 +52,10 @@ pub struct OpCounts {
     pub states_contradicts: usize,
     pub states_supersedes: usize,
     pub dispositions: usize,
+    pub rules_novel: usize,
+    pub rules_duplicate: usize,
+    pub rules_supersedes: usize,
+    pub rules_retract: usize,
     pub reinforces: usize,
     pub aliases: usize,
     pub distills: usize,
@@ -98,6 +102,12 @@ fn count(ops: &[Op]) -> OpCounts {
                 Relation::Supersedes => c.states_supersedes += 1,
             },
             Op::Disposition { .. } => c.dispositions += 1,
+            Op::Rule(rule) => match rule.relation {
+                RuleRelation::Novel => c.rules_novel += 1,
+                RuleRelation::Duplicate => c.rules_duplicate += 1,
+                RuleRelation::Supersedes => c.rules_supersedes += 1,
+                RuleRelation::Retract => c.rules_retract += 1,
+            },
             Op::Reinforce { .. } => c.reinforces += 1,
             Op::Alias { .. } => c.aliases += 1,
             Op::Distill { .. } => c.distills += 1,
@@ -138,7 +148,7 @@ pub fn run(
     for turn in &turns.turns {
         let turn_text = transcript(turn);
         let neighborhood = Neighborhood::open(graph, &RoutingTable::build(graph), &turn_text);
-        let prompt = harvest::render_harvest_prompt_scoped(graph, &turn_text, "", "", turn.at_epoch, scope);
+        let prompt = harvest::render_harvest_prompt_scoped(graph, &HarvestInput::turn(&turn_text, ""), turn.at_epoch, scope);
         let prompt_chars = prompt.len();
         let request = ChatRequest {
             system: String::new(),
@@ -169,7 +179,7 @@ pub fn run(
         let ops_count = count(&ops);
         let distillants_before: BTreeSet<String> = graph.distillants.keys().cloned().collect();
         let leaves_before: BTreeSet<String> = graph.leaves.keys().cloned().collect();
-        let traces = harvest::apply_ops(graph, ops, turn.at_epoch);
+        let traces = harvest::apply_ops(graph, ops, turn.at_epoch).traces;
         store::save(data_file, graph)?;
         let new_distillants: Vec<String> =
             graph.distillants.keys().filter(|k| !distillants_before.contains(*k)).cloned().collect();

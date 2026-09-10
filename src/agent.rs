@@ -1,5 +1,6 @@
-//! The chat agent: system prompt assembly (pinned profile + registry skeleton)
-//! and the per-turn tool loop (`open_memory` BFS descent over the map).
+//! The chat agent: system prompt assembly (pinned rules + pinned profile +
+//! registry skeleton) and the per-turn tool loop (`open_memory` BFS descent
+//! over the map).
 
 use anyhow::Result;
 use serde_json::{json, Value};
@@ -19,14 +20,16 @@ pub fn open_memory_tool() -> ToolDef {
         description: "Open a distillant from your memory map and read the detailed facts stored \
                       under it. Call this when the map shows a distillant relevant to the user's \
                       message whose details you need and that are not already in a <recall> \
-                      block. Prefer the deepest relevant distillant."
+                      block. Prefer the deepest relevant distillant. The id \"rules\" opens the \
+                      standing instructions with the wording each one replaced, and the \
+                      ones the user withdrew."
             .to_string(),
         input_schema: json!({
             "type": "object",
             "properties": {
                 "distillant": {
                     "type": "string",
-                    "description": "Distillant id exactly as shown in the map, e.g. \"money\" or \"people/lisa\""
+                    "description": "Distillant id exactly as shown in the map, e.g. \"money\" or \"people/lisa\", or \"rules\""
                 }
             },
             "required": ["distillant"],
@@ -35,9 +38,13 @@ pub fn open_memory_tool() -> ToolDef {
     }
 }
 
-pub fn build_system(graph: &Graph, now: u64) -> String {
-    let profile = projection::render_profile(graph, now);
-    let skeleton = projection::render_registry_skeleton(graph, now);
+pub fn build_system(graph: &Graph) -> String {
+    let rules = match projection::render_rules(graph) {
+        Some(rules) => format!("# Standing instructions\n{rules}\n"),
+        None => String::new(),
+    };
+    let profile = projection::render_profile(graph);
+    let skeleton = projection::render_registry_skeleton(graph);
     format!(
         "You are Narrative, a personal assistant with a real long-term memory of your user. \
          You are concise, warm, and concrete. You never mention the memory system, the trees, \
@@ -45,6 +52,7 @@ pub fn build_system(graph: &Graph, now: u64) -> String {
          with a great memory does. If memory contradicts what the user says now, trust the user \
          and note the change matter-of-factly.\n\
          \n\
+         {rules}\
          # Profile (who you are talking to)\n\
          Always-relevant distillation of the user. Let it shape tone and judgment.\n\
          {profile}\n\
@@ -77,7 +85,7 @@ pub fn run_turn(
 
     for _ in 0..MAX_TOOL_ROUNDS {
         let req = ChatRequest {
-            system: build_system(graph, now),
+            system: build_system(graph),
             messages: history.clone(),
             tools: vec![open_memory_tool()],
             output_schema: None,
