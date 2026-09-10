@@ -1855,16 +1855,16 @@ mod tests {
         let before = g.leaves["city"].clone();
         let documents = vec![Document { name: "USER.md".into(), text: "Lives in Lisbon.".into() }];
         let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
-        // Two ops in one batch name the same fact: the archive is cited once.
+        // Two ops in one batch name the same fact: the marker is cited once.
         let ops = vec![
             state_op("city-again", "Lives in Lisbon", Relation::Duplicate, "city"),
             state_op("city-thrice", "Lives in Lisbon", Relation::Duplicate, "city"),
         ];
         apply_harvest(&mut g, ops, &input, 2_000);
-        assert_eq!(g.episodes.len(), 1, "the source archive is the only episode");
-        let archive = g.episodes[0].id.clone();
+        assert_eq!(g.episodes.len(), 1, "the import marker is the only episode");
+        let marker = g.episodes[0].id.clone();
         let after = &g.leaves["city"];
-        assert_eq!(after.evidence, vec![archive.clone()], "a duplicate cites its source, once");
+        assert_eq!(after.evidence, vec![marker.clone()], "a duplicate cites its source, once");
         assert_eq!(after.text, before.text);
         assert_eq!(after.updated_at, before.updated_at, "no clock moves on a duplicate");
         assert_eq!(after.occurred_at, before.occurred_at);
@@ -1873,7 +1873,7 @@ mod tests {
 
         apply_ops(&mut g, vec![Op::Forget { target: "city".into() }], 3_000);
         assert!(!g.leaves.contains_key("city"));
-        assert!(g.episodes.is_empty(), "the archive was evidence for nothing else; it goes with the fact");
+        assert!(g.episodes.is_empty(), "the marker was evidence for nothing else; it goes with the fact");
     }
 
     #[test]
@@ -1888,9 +1888,9 @@ mod tests {
             let applied = apply_harvest(&mut g, vec![rule_op("five-lines", "keep replies to five lines", relation, target, "")], &input, 2_000);
             assert!(matches!(applied.rules[0].effect, RuleEffect::Duplicate { .. }), "{relation:?}: {:?}", applied.rules);
             assert_eq!(g.episodes.len(), 1);
-            let archive = g.episodes[0].id.clone();
+            let marker = g.episodes[0].id.clone();
             let after = &g.leaves["five-lines"];
-            assert_eq!(after.evidence, vec![archive], "{relation:?}: the duplicate cites its source");
+            assert_eq!(after.evidence, vec![marker], "{relation:?}: the duplicate cites its source");
             assert_eq!(after.text, before.text);
             assert_eq!(after.updated_at, before.updated_at, "{relation:?}: no clock moves");
             assert_eq!(after.occurred_at, before.occurred_at);
@@ -1920,12 +1920,12 @@ mod tests {
             rule_op("five-lines", "keep replies to five lines", RuleRelation::Duplicate, "five-lines", ""),
         ];
         apply_harvest(&mut g, ops, &input, 2_000);
-        let archive = g.episodes[0].id.clone();
-        assert_eq!(g.leaves["city"].evidence, vec![archive.clone()]);
-        assert_eq!(g.leaves["five-lines"].evidence, vec![archive.clone()]);
+        let marker = g.episodes[0].id.clone();
+        assert_eq!(g.leaves["city"].evidence, vec![marker.clone()]);
+        assert_eq!(g.leaves["five-lines"].evidence, vec![marker.clone()]);
 
         apply_ops(&mut g, vec![Op::Forget { target: "city".into() }], 3_000);
-        assert!(g.episodes.iter().any(|e| e.id == archive), "the rule still cites the marker");
+        assert!(g.episodes.iter().any(|e| e.id == marker), "the rule still cites the marker");
         apply_ops(&mut g, vec![Op::Forget { target: "five-lines".into() }], 4_000);
         assert!(g.episodes.is_empty(), "the user forgot its last citer; so does it");
     }
