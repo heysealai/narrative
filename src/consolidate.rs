@@ -685,13 +685,15 @@ pub fn stats(graph: &Graph) -> String {
     let n_reg = graph.distillants.values().filter(|m| m.tree == Tree::Registry).count();
     let n_prof = graph.distillants.values().filter(|m| m.tree == Tree::Profile).count();
     let n_rules = graph.rules().len();
+    let n_withdrawn = graph.withdrawn_rules().len();
     let _ = writeln!(
         out,
-        "distillants: {} registry / {} profile · leaves: {} ({} rules) · episodes: {}",
+        "distillants: {} registry / {} profile · leaves: {} ({} rules, {} withdrawn) · episodes: {}",
         n_reg,
         n_prof,
-        graph.leaves.len() - n_rules,
+        graph.leaves.len() - n_rules - n_withdrawn,
         n_rules,
+        n_withdrawn,
         graph.episodes.len()
     );
 

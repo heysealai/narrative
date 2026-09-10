@@ -261,7 +261,9 @@ fn render_leaf_line(out: &mut String, graph: &Graph, leaf_id: &str, now: u64) {
         }
         LeafKind::Rule(rule) => {
             let _ = write!(out, "- [{}] {}", l.id, l.text);
-            if let Some(last) = rule.history.last() {
+            if let Some(at) = rule.retracted_at {
+                let _ = write!(out, " (withdrawn {})", age_str(now, at));
+            } else if let Some(last) = rule.history.last() {
                 let _ = write!(out, " (changed {}; was: {})", age_str(now, last.superseded_at), last.value);
             } else {
                 let _ = write!(out, " (given {})", age_str(now, l.occurred_at.unwrap_or(l.created_at)));
@@ -271,13 +273,16 @@ fn render_leaf_line(out: &mut String, graph: &Graph, leaf_id: &str, now: u64) {
     }
 }
 
-/// The rules in the order the pinned block lists them: the latest
-/// instruction first, ties by id, so a fresh correction reads before the
-/// rule it did not touch.
-fn rules_latest_first(graph: &Graph) -> Vec<&Leaf> {
-    let mut rules = graph.rules();
+/// Rules in the order the pinned block lists them: the latest change
+/// first, ties by id, so a fresh correction reads before the rule it did
+/// not touch.
+fn latest_first(mut rules: Vec<&Leaf>) -> Vec<&Leaf> {
     rules.sort_by(|a, b| b.updated_at.cmp(&a.updated_at).then_with(|| a.id.cmp(&b.id)));
     rules
+}
+
+fn rules_latest_first(graph: &Graph) -> Vec<&Leaf> {
+    latest_first(graph.rules())
 }
 
 /// Pinned tier, first section: the standing instructions under their
@@ -300,7 +305,8 @@ pub fn render_rules(graph: &Graph) -> Option<String> {
 }
 
 /// The full open of the rules — the `open_memory` result for [`RULES`]:
-/// every rule with its whole history of wording and the age of each change.
+/// every rule in force with its whole history of wording and the age of
+/// each change, then every rule the user withdrew, with when.
 pub fn render_rules_open(graph: &Graph, now: u64) -> String {
     let rules = rules_latest_first(graph);
     let mut out = format!("# {RULES} — standing instructions, latest first\n");
@@ -311,6 +317,16 @@ pub fn render_rules_open(graph: &Graph, now: u64) -> String {
         render_leaf_line(&mut out, graph, &l.id, now);
         for earlier in l.kind.history().iter().rev().skip(1) {
             let _ = writeln!(out, "    was: {} (until {})", earlier.value, age_str(now, earlier.superseded_at));
+        }
+    }
+    let withdrawn = latest_first(graph.withdrawn_rules());
+    if !withdrawn.is_empty() {
+        out.push_str("Withdrawn — no longer in force; the user can give one again:\n");
+        for l in withdrawn {
+            render_leaf_line(&mut out, graph, &l.id, now);
+            for earlier in l.kind.history().iter().rev() {
+                let _ = writeln!(out, "    was: {} (until {})", earlier.value, age_str(now, earlier.superseded_at));
+            }
         }
     }
     out
@@ -760,6 +776,7 @@ mod tests {
         five.kind = LeafKind::Rule(crate::model::RuleKind {
             history: vec![crate::model::Supersession { value: "keep replies to three lines".into(), superseded_at: 8 * day }],
             instruction: Some("i-2".into()),
+            retracted_at: None,
         });
         g.leaves.insert(five.id.clone(), five);
         let ask = Leaf::rule("ask-first".into(), "ask before any spend over $20".into(), None, 12 * day);

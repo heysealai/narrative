@@ -21,7 +21,8 @@ pub fn open_memory_tool() -> ToolDef {
                       under it. Call this when the map shows a distillant relevant to the user's \
                       message whose details you need and that are not already in a <recall> \
                       block. Prefer the deepest relevant distillant. The id \"rules\" opens the \
-                      standing instructions with the wording each one replaced."
+                      standing instructions with the wording each one replaced, and the \
+                      ones the user withdrew."
             .to_string(),
         input_schema: json!({
             "type": "object",

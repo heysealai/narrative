@@ -66,16 +66,19 @@ late-month`). Split by species, each in its native topology:
 | **Stream** | time-ordered log | episodes | immutable, accumulate, fade/compress |
 | **Registry** | noun-shaped tree (people, accounts, obligations, work...) | state facts | current value + supersession history |
 | **Profile** | one apex — the character estimate — over a trait-shaped shallow tree (spend discipline, risk appetite, communication style...) | dispositions | scored axes that drift, with trajectories; the apex line is distilled from the axis lines |
-| **Rules** | flat list, under no tree | rules | the user's standing instructions in their own words; binding on first occurrence, superseded or retracted only by a later instruction |
+| **Rules** | flat list, under no tree | rules | the user's standing instructions in their own words; binding on first occurrence, superseded, withdrawn or reinstated only by a later instruction |
 
 A rule is what the user *said*, not what the engine inferred: "keep replies to five
 lines", "ask before any spend over $20". It carries no belief, no salience, no parent —
 nothing inferred moves one. Routing, projection, and consolidation all walk by parent,
 so a rule is invisible to every mechanism that weighs evidence, by construction rather
 than by exemption. The one thing that changes a rule is the user changing it: a later
-instruction supersedes its wording (the old words stay as history) or retracts it. A
-retract withdraws the rule and touches nothing else — the stream keeps the turn that
-gave it and the turn that withdrew it; erasing is a forget, and only the user asks for one.
+instruction supersedes its wording (the old words stay as history), retracts it, or
+gives a withdrawn one again. A retract takes the rule out of force and out of every
+prompt and touches nothing else: the rule stays on record under its id with when it was
+withdrawn, the way a superseded state keeps its old value — so "why did you start doing
+X again?" has an answer, and the user giving the rule again reinstates it under the same
+id rather than minting a look-alike. Erasing is a forget, and only the user asks for one.
 
 The stream is the **shared evidence pool**: one episode ("paid rent late in May") supports a
 registry history and nudges a profile axis. Both trees hold pointers into it; episodes are
@@ -172,12 +175,13 @@ There is no explicit `remember` tool taxing the live turn. Writes are ambient:
   every recall; the harvester nudges by id.
 - **Rules are harvested ambiently, and the rules are pinned for the harvester too.** A
   rule-shaped utterance ("from now on, five lines") becomes a `rules` op in the user's
-  own words; every standing rule rides in every harvest prompt by id, so an instruction
-  that changes one supersedes or retracts it by id rather than minting a second. A host
+  own words; every standing rule rides in every harvest prompt by id, the withdrawn ones
+  after them, so an instruction that changes one supersedes or retracts it by id, and one
+  that gives a withdrawn rule again reinstates it by id, rather than minting a second. A host
   that acknowledged an instruction before memory caught up can hand it to the harvester
   as an *instruction to resolve*: each is answered by id with exactly one rules op, or
   none, and the runtime reports every instruction's resolution — kept, superseded,
-  retracted, duplicate, or not a rule — so the host can tell the user what memory did
+  retracted, reinstated, duplicate, or not a rule — so the host can tell the user what memory did
   with it.
 
 ### Contradiction cross-matching happens at write, via projection pointed backwards

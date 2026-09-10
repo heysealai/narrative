@@ -44,7 +44,7 @@ Three stores and a rules list, one routing table, two motions:
 | **Stream** | time-ordered episodes | immutable, accumulate, digest, fade |
 | **Registry** | noun-shaped tree of state facts | current value + supersession history (*states switch*) |
 | **Profile** | one apex (the character estimate) over a trait-shaped tree of dispositions | scored axes with nudge trajectories (*dispositions drift*); the apex line is distilled from the axis lines |
-| **Rules** | flat list under no tree | the user's standing instructions, verbatim; binding on first occurrence, changed only by a later instruction (*rules bind*) |
+| **Rules** | flat list under no tree | the user's standing instructions, verbatim; binding on first occurrence, changed — reworded, withdrawn, reinstated — only by a later instruction (*rules bind*) |
 
 **Write path (ambient, no remember-tool).** Every finished turn goes to the
 harvester, which emits structured ops — new leaves, supports / contradicts /
@@ -71,22 +71,25 @@ lines, the runtime compiles them.
 Saved documents enter separately through `HarvestInput.documents`, never
 through the Rule-only instruction-resolution contract. Their facts, dated
 experiences and independent explicit instructions can populate all memory
-kinds. `apply_harvest` applies the model's ops and marks each import with
-one episode (`Imported saved memory: <name>`) even when extraction returns
-nothing; the document's body is the host's record, not memory's, so the
-marker carries the name alone and follows ordinary stream compaction and
-forgetting. Every accepted op cites the batch's episodes on the leaf it
-landed on — a duplicate moves no belief, wording or clock, but still cites
-its source, so a document that only restated known memory is forgotten
-with what it restated. A retract withdraws the rule and nothing else: the
-stream keeps the turn that gave it and the turn that withdrew it; only a
-forget erases, and nothing applied after a forget in the same batch cites
-an episode it took. A relation naming a missing target stores its words as
-novel under its own id only when that id is free; it never overwrites
-another record, and the reserved open id `rules` is never a distillant.
-Hosts retain source rows until their graph transaction commits and redact
-secrets before supplying these inputs. The plain `apply_ops` seam remains
-for ops without source material; `run` uses `apply_harvest`.
+kinds. The engine frames each document for the harvester with when it was
+written (`Document.written_at`), so a two-year-old note is read as of then:
+memory newer than the document outranks it, the document's own dates are
+the event time of what it says, and the import itself is not an event. The
+document and the record of its import stay the host's; a host that wants
+the import on the user's record pushes an episode of its own into the
+batch, and the ordinary rule does the rest: every accepted op cites the
+batch's episodes on the leaf it landed on — a duplicate moves no belief,
+wording or clock, but still cites its source, so a document that only
+restated known memory is forgotten with what it restated. A retract
+withdraws the rule and nothing else: the rule leaves every prompt but
+stays on record under its id (`open rules` lists it as withdrawn), the
+user giving it again reinstates it, and only a forget erases it — and
+nothing applied after a forget in the same batch cites an episode it
+took. A relation naming a missing target stores its words as novel under
+its own id only when that id is free; it never overwrites another record,
+and the reserved open id `rules` is never a distillant. Hosts retain
+source rows until their graph transaction commits and redact secrets
+before supplying these inputs.
 
 **Read path (mechanical, two motions).** The rules ride pinned in every
 request, rendered without ages so the block is byte-stable between changes;

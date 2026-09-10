@@ -153,14 +153,26 @@ pub struct DispositionKind {
 }
 
 /// What a rule carries beside the user's words: the texts it superseded,
-/// and the host's instruction id it answered when it answered one. No
-/// belief, no salience: nothing inferred moves a rule.
+/// the host's instruction id it answered when it answered one, and when
+/// the user withdrew it if they did. No belief, no salience: nothing
+/// inferred moves a rule. A withdrawn rule is out of force and out of
+/// every prompt but on record, so the user giving it again reinstates it
+/// under the same id; only a forget erases it.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RuleKind {
     #[serde(default)]
     pub history: Vec<Supersession>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instruction: Option<String>,
+    /// Event time of the withdrawal; None while the rule is in force.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retracted_at: Option<u64>,
+}
+
+impl RuleKind {
+    pub fn is_standing(&self) -> bool {
+        self.retracted_at.is_none()
+    }
 }
 
 /// The species-specific part of a leaf. Tagged by `species` in the stored
@@ -284,7 +296,7 @@ impl Leaf {
     /// A rule: the user's words, under no distillant, answering the host's
     /// instruction when it answered one.
     pub fn rule(id: Id, text: String, instruction: Option<String>, at: u64) -> Self {
-        let kind = LeafKind::Rule(RuleKind { history: Vec::new(), instruction });
+        let kind = LeafKind::Rule(RuleKind { history: Vec::new(), instruction, retracted_at: None });
         Self::born(id, text, Vec::new(), kind, at)
     }
 
@@ -294,6 +306,16 @@ impl Leaf {
 
     pub fn is_rule(&self) -> bool {
         matches!(self.kind, LeafKind::Rule(_))
+    }
+
+    /// A rule in force: given and not withdrawn.
+    pub fn is_standing_rule(&self) -> bool {
+        matches!(&self.kind, LeafKind::Rule(r) if r.is_standing())
+    }
+
+    /// A rule the user withdrew: on record, out of force.
+    pub fn is_withdrawn_rule(&self) -> bool {
+        matches!(&self.kind, LeafKind::Rule(r) if !r.is_standing())
     }
 }
 
@@ -474,9 +496,14 @@ impl Graph {
             .collect()
     }
 
-    /// Every rule, by id.
+    /// Every rule in force, by id.
     pub fn rules(&self) -> Vec<&Leaf> {
-        self.leaves.values().filter(|l| l.is_rule()).collect()
+        self.leaves.values().filter(|l| l.is_standing_rule()).collect()
+    }
+
+    /// Every rule the user withdrew, by id: out of force, on record.
+    pub fn withdrawn_rules(&self) -> Vec<&Leaf> {
+        self.leaves.values().filter(|l| l.is_withdrawn_rule()).collect()
     }
 
     pub fn child_distillants(&self, distillant_id: &str) -> Vec<&Distillant> {
@@ -1133,8 +1160,21 @@ mod tests {
         assert_eq!(encoded["species"], "rule");
         assert_eq!(encoded["instruction"], "i-1");
         assert!(encoded.get("belief").is_none(), "a rule stores no belief: {encoded}");
+        assert!(encoded.get("retracted_at").is_none(), "a standing rule stores no withdrawal: {encoded}");
         let decoded: Leaf = serde_json::from_value(encoded).unwrap();
-        assert!(decoded.is_rule());
+        assert!(decoded.is_standing_rule(), "a rule stored before withdrawal existed decodes as standing");
+
+        let mut withdrawn = decoded.clone();
+        let LeafKind::Rule(r) = &mut withdrawn.kind else { unreachable!() };
+        r.retracted_at = Some(9);
+        assert!(withdrawn.is_withdrawn_rule() && !withdrawn.is_standing_rule());
+        let encoded = serde_json::to_value(&withdrawn).unwrap();
+        assert_eq!(encoded["retracted_at"], 9);
+        let mut g = Graph::default();
+        g.leaves.insert(rule.id.clone(), rule.clone());
+        g.leaves.insert("w".into(), Leaf { id: "w".into(), ..withdrawn });
+        assert_eq!(g.rules().len(), 1, "a withdrawn rule is not in force");
+        assert_eq!(g.withdrawn_rules().len(), 1, "but it is on record");
 
         // A rule that somehow acquired parents is unhomed by normalize.
         let mut g = Graph::seed();

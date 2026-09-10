@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 use crate::belief;
 use crate::llm::{ChatRequest, Llm};
-use crate::model::{Belief, Distillant, Graph, Leaf, LeafKind, Nudge, Salience, Species, Supersession, Tree, PROFILE_APEX};
+use crate::model::{age_str, Belief, Distillant, Graph, Leaf, LeafKind, Nudge, Salience, Species, Supersession, Tree, PROFILE_APEX};
 use crate::projection;
 use crate::routing;
 
@@ -27,7 +27,8 @@ pub enum Relation {
 }
 
 /// How a rules entry relates to the standing rules: a new instruction, a
-/// restatement of one, a change of one's wording, or its withdrawal.
+/// restatement of one, a change of one's wording, or its withdrawal. Any
+/// of the first three on a withdrawn rule's id reinstates it.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum RuleRelation {
@@ -399,12 +400,12 @@ pub fn ops_schema() -> Value {
                 }
             },
             "rules": {
-                "description": "Standing instructions: what the user asked for that should hold on every future turn, in their own words. Binding on first occurrence; never weighed or merged. An instruction that changes a standing rule shown to you supersedes or retracts it by id — never adds a second.",
+                "description": "Standing instructions: what the user asked for that should hold on every future turn, in their own words. Binding on first occurrence; never weighed or merged. An instruction that changes a standing rule shown to you supersedes or retracts it by id — never adds a second; one that gives a withdrawn rule again names that rule's id and reinstates it.",
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "id": {"type": "string", "description": "kebab-case slug, stable handle; the existing rule's id when relation is supersedes, duplicate or retract"},
+                        "id": {"type": "string", "description": "kebab-case slug, stable handle; the existing rule's id when relation is supersedes, duplicate or retract, and the withdrawn rule's id when the user gives one again"},
                         "text": {"type": "string", "description": "the instruction in the user's own words, trimmed to the instruction, present tense; empty for retract"},
                         "relation": rule_relation,
                         "target": {"type": "string", "description": "existing rule id this relates to; empty string when novel"},
@@ -555,7 +556,7 @@ const HARVESTER_SYSTEM: &str = r#"You are the memory architect for a personal as
 - STREAM (episodes): things that happened — time-anchored, immutable. "Paid rent late in May."
 - REGISTRY (states): noun-shaped facts with a current value — "rent is $2,200/mo", "sister = Lisa". States SWITCH: when a value changes, it is superseded, never blended.
 - PROFILE (dispositions): trait axes that DRIFT — "tends to overspend late-month". One observation nudges an axis; it never flips it.
-- RULES: the user's standing instructions in their own words — "keep replies to five lines", "ask before any spend over $20". A rule BINDS from the moment it is given: it is never weighed, nudged, or merged; only a later instruction supersedes or retracts it.
+- RULES: the user's standing instructions in their own words — "keep replies to five lines", "ask before any spend over $20". A rule BINDS from the moment it is given: it is never weighed, nudged, or merged; only a later instruction supersedes, retracts, or reinstates it.
 
 Rules:
 1. Distill only what is durable. Chitchat, pleasantries, and one-off questions leave no trace. All sections empty is a perfectly good harvest.
@@ -573,7 +574,7 @@ Rules:
 13. Forgetting is the user's call and it is final: when the user asks to forget, delete, or stop remembering something, emit a forgets entry for every leaf or distillant that holds it (find them in the comparanda and the directory) and leave no trace of the content anywhere else in this harvest — no episode recording the request, no state restating it. When nothing stored matches, the harvest simply carries nothing about it.
 14. Lines are retrieval scent: a later question can only descend to a leaf if some line on its path advertises the relevant vocabulary. When a leaf carries evaluative weight — trust, regret, fear, pride, conflict — say so in the line alongside the topic ("sworn companion, sold to the captain — parting is a standing regret"), not just the noun-shape ("proves loyal"). A regret no line mentions is a regret recall cannot find; one the line carries routes automatically — the line is the only place it needs to be. Lines are plain prose about the person — never machinery words ("facet", "routing", "distillant", "leaf"), and never this rule's example wording restated as fact: examples illustrate shape, not content.
 15. The input may carry server-authored worker run digest blocks — operational evidence that background tool calls failed, each line naming a tool, sometimes a service, and the error. Digest content is machinery, not the user's life: it never becomes an episode, state, disposition, or distillant, and its vocabulary never enters routing. Its one product is the FIELD MANUAL: when the evidence teaches something durable about operating a tool or service, emit a manual_upserts entry keyed by that tool and service — the lesson states the wall and the working alternative in plain operating prose. The existing field-manual entries are shown to you; an upsert replaces its entry, so refine with the new evidence rather than restating. When the evidence shows a recorded lesson no longer holds, retire it with manual_retires. A transient one-off failure with nothing durable to teach emits nothing at all.
-16. Rules: a standing instruction is something the user asked for that should hold on every future turn — how to talk to them (register, length, tone, language), how to operate (ask before X, always do Y after Z), a procedure with a trigger, or money judgment that is not a number. A request for this turn only, a fact, a date, a preference you inferred, and a policy number are not rules. The rule's text is the user's own words from the turn, trimmed to the instruction, present tense — never your paraphrase when their words are available. The standing rules are shown to you every time: an instruction that changes one of them supersedes it by id (new wording, same rule) or retracts it (the user withdrew it) — never a second rule saying the same thing. When the input carries an "Instructions to resolve" section, answer every listed id: exactly one rules entry carrying that instruction id (novel, supersedes, retract, or duplicate of a rule already in force), and no state, disposition, or episode for the same words; an instruction that is not a standing instruction gets no entry at all — the runtime reports it as not kept. Instructions resolve in the order listed. Rules carry no importance, no distillant, and no evidence weighing."#;
+16. Rules: a standing instruction is something the user asked for that should hold on every future turn — how to talk to them (register, length, tone, language), how to operate (ask before X, always do Y after Z), a procedure with a trigger, or money judgment that is not a number. A request for this turn only, a fact, a date, a preference you inferred, and a policy number are not rules. The rule's text is the user's own words from the turn, trimmed to the instruction, present tense — never your paraphrase when their words are available. The standing rules are shown to you every time: an instruction that changes one of them supersedes it by id (new wording, same rule) or retracts it (the user withdrew it) — never a second rule saying the same thing. The rules the user withdrew are listed after them: an instruction that gives one of those again names its id (novel, supersedes, or duplicate on that id) and the runtime reinstates it — never a second rule. When the input carries an "Instructions to resolve" section, answer every listed id: exactly one rules entry carrying that instruction id (novel, supersedes, retract, or duplicate of a rule already in force), and no state, disposition, or episode for the same words; an instruction that is not a standing instruction gets no entry at all — the runtime reports it as not kept. Instructions resolve in the order listed. Rules carry no importance, no distillant, and no evidence weighing."#;
 
 /// What the harvester sees of the distillant layer. Every scope shows every
 /// distillant BY ID, so a fact can always be filed under an existing node;
@@ -691,16 +692,26 @@ const HARVEST_TOTAL_CAP: usize = 48;
 
 /// The standing rules, every one by id, for the harvester to supersede or
 /// retract by id rather than mint a second rule saying the same thing —
-/// pinned for the harvester as the profile is.
+/// pinned for the harvester as the profile is. The withdrawn rules follow
+/// by id, so one the user gives again is reinstated rather than minted.
 fn render_pinned_rules(graph: &Graph) -> String {
-    let mut rules = graph.rules();
-    rules.sort_by(|a, b| a.id.cmp(&b.id));
+    fn by_id(mut rules: Vec<&Leaf>) -> Vec<&Leaf> {
+        rules.sort_by(|a, b| a.id.cmp(&b.id));
+        rules
+    }
     let mut out = String::new();
-    for l in rules {
+    for l in by_id(graph.rules()) {
         let _ = writeln!(out, "- [{}] {}", l.id, l.text);
     }
     if out.is_empty() {
         out.push_str("(none)\n");
+    }
+    let withdrawn = by_id(graph.withdrawn_rules());
+    if !withdrawn.is_empty() {
+        out.push_str("Withdrawn (out of force; an instruction giving one of these again names its id and reinstates it):\n");
+        for l in withdrawn {
+            let _ = writeln!(out, "- [{}] {}", l.id, l.text);
+        }
     }
     out
 }
@@ -792,20 +803,26 @@ pub struct Instruction {
     pub paraphrase: String,
 }
 
-/// A saved document the host holds: what to call it, and the text the
-/// harvester reads. The body stays the host's record; memory keeps the
-/// name, on the episode that marks the import.
+/// A saved document the host holds: what to call it, the text the
+/// harvester reads, and when it was written if the host knows. The engine
+/// frames it for the harvester and accepts what the harvester cuts from
+/// it; the document itself, and the record of its import, stay the
+/// host's. A host that wants the import on the user's record pushes an
+/// [`Op::Episode`] of its own into the batch.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Document {
     pub name: String,
     pub text: String,
+    /// When the document was written, unix seconds: the age the harvester
+    /// reads its words at, so a two-year-old note does not read as today's
+    /// words. None when the host does not know.
+    pub written_at: Option<u64>,
 }
 
 /// What the harvester reads of a finished turn and pending source material.
 /// `field_manual` is the host-rendered upsert compare point. `instructions`
-/// receive Rule-only verdicts; `documents` can contribute every memory kind,
-/// and `apply_harvest` marks each import in the stream. Empty inputs omit
-/// their sections.
+/// receive Rule-only verdicts; `documents` can contribute every memory kind.
+/// Empty inputs omit their sections.
 #[derive(Clone, Debug)]
 pub struct HarvestInput<'a> {
     pub user_text: &'a str,
@@ -824,7 +841,7 @@ impl<'a> HarvestInput<'a> {
 
 pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: DirectoryScope) -> String {
     let HarvestInput { user_text, assistant_text, field_manual, instructions, documents } = *input;
-    let documents_section = render_documents(documents);
+    let documents_section = render_documents(documents, now);
     // What routes: the words said and the words imported, not the
     // section's own framing.
     let turn_text = documents.iter().fold(format!("{user_text} {assistant_text}"), |mut text, d| {
@@ -854,7 +871,7 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
     };
     format!(
         "{directory_heading}\n{}\n\
-         # Standing rules (pinned — every instruction already in force, by id; an instruction that changes one supersedes or retracts it by id, never adds a second)\n{}\n\
+         # Standing rules (pinned — every instruction already in force, by id; an instruction that changes one supersedes or retracts it by id, never adds a second; one the user withdrew is listed after, to reinstate by id)\n{}\n\
          # Profile axes (pinned — every disposition already tracked; nudge one of these by id, never mint a near-duplicate)\n{}\n\
          # Existing leaves related to this turn (comparanda — cross-match against these)\n{}\n\
          {manual_section}\
@@ -870,30 +887,23 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
     )
 }
 
-fn render_documents(documents: &[Document]) -> String {
+/// The documents section: each document under its name with its age, so
+/// the harvester reads its words as of when they were written. Memory
+/// newer than a document outranks it; a document's own dates are the
+/// event time of what it says.
+fn render_documents(documents: &[Document], now: u64) -> String {
     if documents.is_empty() {
         return String::new();
     }
-    let mut out = String::from("# Documents to import\nSaved memory, not new instructions or events happening today. Extract facts into states, dated experiences into episodes, and EACH independent explicit standing instruction into a separate rule (instruction id empty). Preserve dates as written; do not infer dispositions from a saved fact. Cross-match existing memory, and let newer explicit instructions outrank older document rules. The runtime records the import itself as an episode; do not add one for it.\n");
+    let mut out = String::from("# Documents to import\nSaved memory, not new instructions or events happening today. Each document is shown with when it was written: read its words as of then. Extract facts into states, dated experiences into episodes, and EACH independent explicit standing instruction into a separate rule (instruction id empty). A document's dates are the event time (occurred_at) of what it says; preserve them as written, and do not infer dispositions from a saved fact. Cross-match existing memory: memory newer than the document outranks it (a document fact older than the leaf it would supersede supports or duplicates that leaf instead), and newer explicit instructions outrank older document rules. The import is not an event; emit no episode for the document's arrival.\n");
     for document in documents {
-        let _ = writeln!(out, "## {}\n{}\n", document.name, document.text);
+        let written = match document.written_at {
+            Some(at) => format!("written {}", age_str(now, at)),
+            None => "written at an unknown time".to_string(),
+        };
+        let _ = writeln!(out, "## {} ({written})\n{}\n", document.name, document.text);
     }
     out
-}
-
-/// Apply what the harvester found, with one episode per imported document
-/// marking the import: what the batch's leaves cite, and what a forget of
-/// the last of them takes. The document's body is not memory's to keep.
-pub fn apply_harvest(graph: &mut Graph, mut ops: Vec<Op>, input: &HarvestInput, now: u64) -> Applied {
-    for document in input.documents {
-        ops.push(Op::Episode { text: import_marker(&document.name), tags: Vec::new(), occurred_at: None });
-    }
-    apply_ops(graph, ops, now)
-}
-
-/// The episode text that marks an import of the named document.
-pub fn import_marker(name: &str) -> String {
-    format!("Imported saved memory: {name}")
 }
 
 /// The keyless prompt: system contract, the exact output schema, and the
@@ -942,7 +952,7 @@ pub fn run(llm: &dyn Llm, graph: &mut Graph, input: &HarvestInput, now: u64) -> 
             eprintln!("[debug] raw harvest: {}", resp.text());
         }
         match parse_ops(&resp.text()) {
-            Ok(ops) => return Ok(apply_harvest(graph, ops, input, now)),
+            Ok(ops) => return Ok(apply_ops(graph, ops, now)),
             Err(e) => last_err = Some(e),
         }
     }
@@ -1070,10 +1080,14 @@ pub enum RuleEffect {
     Kept { id: String, text: String },
     /// A standing rule's wording changed.
     Superseded { id: String, from: String, to: String },
-    /// A standing rule was withdrawn.
+    /// A standing rule was withdrawn: out of force, on record. Also the
+    /// answer to withdrawing one already withdrawn.
     Retracted { id: String, text: String },
     /// The instruction restated a rule already in force.
     Duplicate { id: String, text: String },
+    /// A withdrawn rule is in force again, with the words it was given
+    /// again in; earlier words stay in its history.
+    Reinstated { id: String, text: String },
 }
 
 /// One rules entry's effect, with the host's instruction it answered when
@@ -1417,9 +1431,55 @@ fn supersede_rule(leaf: &mut Leaf, words: RuleWords, now: u64, evidence: &[Strin
     RuleEffect::Superseded { id: id.clone(), from, to: text }
 }
 
-/// One rules entry against the standing rules. A rule id is never shared
-/// with a state or disposition, and a rule is never weighed, so every
-/// relation resolves by whether the target is a rule already in force.
+/// The user withdrew a standing rule: out of force, out of every prompt,
+/// on record under its id with the batch that withdrew it cited.
+fn retract_rule(leaf: &mut Leaf, at: u64, now: u64, evidence: &[String], traces: &mut Vec<String>) -> RuleEffect {
+    let Leaf { id, text, kind, evidence: leaf_evidence, updated_at, .. } = leaf;
+    let LeafKind::Rule(rule) = kind else { unreachable!("a standing rule is a rule leaf") };
+    rule.retracted_at = Some(at);
+    *updated_at = now;
+    attach_evidence(leaf_evidence, evidence);
+    traces.push(format!("✗ rule withdrawn [{}] — {}", id, text));
+    RuleEffect::Retracted { id: id.clone(), text: text.clone() }
+}
+
+/// The user gave a withdrawn rule again: in force under the same id, in
+/// the words given now; words that differ from the withdrawn ones go to
+/// its history like any rewording.
+fn reinstate_rule(leaf: &mut Leaf, words: RuleWords, now: u64, evidence: &[String], traces: &mut Vec<String>) -> RuleEffect {
+    let RuleWords { text, instruction, occurred_at } = words;
+    let Leaf { id, text: leaf_text, kind, evidence: leaf_evidence, occurred_at: leaf_occurred_at, updated_at, .. } = leaf;
+    let LeafKind::Rule(rule) = kind else { unreachable!("a withdrawn rule is a rule leaf") };
+    rule.retracted_at = None;
+    if *leaf_text != text {
+        let from = std::mem::replace(leaf_text, text.clone());
+        rule.history.push(Supersession { value: from, superseded_at: occurred_at.unwrap_or(now) });
+    }
+    if instruction.is_some() {
+        rule.instruction = instruction;
+    }
+    *leaf_occurred_at = occurred_at;
+    *updated_at = now;
+    attach_evidence(leaf_evidence, evidence);
+    traces.push(format!("↺ rule reinstated [{}] — {}", id, text));
+    RuleEffect::Reinstated { id: id.clone(), text }
+}
+
+/// What a rules entry's target id names.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum RuleTarget {
+    /// A rule in force.
+    Standing,
+    /// A rule the user withdrew: on record, to reinstate.
+    Withdrawn,
+    /// No rule; the words are new.
+    Absent,
+}
+
+/// One rules entry against the rules. A rule id is never shared with a
+/// state or disposition, and a rule is never weighed, so every relation
+/// resolves by what its target names: a rule in force, one withdrawn, or
+/// nothing.
 fn apply_rule(
     graph: &mut Graph,
     op: RuleOp,
@@ -1432,23 +1492,24 @@ fn apply_rule(
     let instruction = (!instruction.trim().is_empty()).then(|| instruction.trim().to_string());
     let target_id = if target.is_empty() { id.clone() } else { target.clone() };
     let text = text.trim().to_string();
-    let standing = match graph.leaves.get(&target_id) {
-        Some(leaf) if leaf.is_rule() => true,
+    let target = match graph.leaves.get(&target_id) {
+        Some(leaf) if leaf.is_standing_rule() => RuleTarget::Standing,
+        Some(leaf) if leaf.is_withdrawn_rule() => RuleTarget::Withdrawn,
         Some(leaf) => {
             traces.push(format!("⚠ rule op targets the {} [{target_id}]; skipped", leaf.species().name()));
             return;
         }
-        None => false,
+        None => RuleTarget::Absent,
     };
     let names_nothing_to_keep = text.is_empty() && relation != RuleRelation::Retract;
     if names_nothing_to_keep {
         traces.push(format!("⚠ rule [{target_id}] with no text; skipped"));
         return;
     }
-    // A relation on a rule not in force keeps the words under `id`, which
-    // the target check did not cover: an occupied id is someone else's
-    // record, whatever its species.
-    if !standing
+    // A relation on no rule keeps the words under `id`, which the target
+    // check did not cover: an occupied id is someone else's record,
+    // whatever its species.
+    if target == RuleTarget::Absent
         && relation != RuleRelation::Retract
         && let Some(occupant) = graph.leaves.get(&id)
     {
@@ -1460,9 +1521,9 @@ fn apply_rule(
     }
     let answers = instruction.clone();
     let words = RuleWords { text, instruction, occurred_at };
-    let effect = match (relation, standing) {
-        (RuleRelation::Novel, false) => keep_rule(graph, id, words, now, evidence, traces),
-        (RuleRelation::Novel, true) => {
+    let effect = match (relation, target) {
+        (RuleRelation::Novel, RuleTarget::Absent) => keep_rule(graph, id, words, now, evidence, traces),
+        (RuleRelation::Novel, RuleTarget::Standing) => {
             // Id collision: new words on a standing id supersede; the same
             // words restate it.
             let leaf = graph.leaves.get_mut(&target_id).expect("standing");
@@ -1474,34 +1535,45 @@ fn apply_rule(
                 supersede_rule(leaf, words, now, evidence, traces)
             }
         }
-        (RuleRelation::Supersedes, true) => {
+        (RuleRelation::Supersedes, RuleTarget::Standing) => {
             let leaf = graph.leaves.get_mut(&target_id).expect("standing");
             supersede_rule(leaf, words, now, evidence, traces)
         }
-        (RuleRelation::Supersedes, false) | (RuleRelation::Duplicate, false) => {
-            // The self-healing fallback: a relation naming a rule that is
-            // not in force keeps the words as a new rule.
+        (RuleRelation::Supersedes, RuleTarget::Absent) | (RuleRelation::Duplicate, RuleTarget::Absent) => {
+            // The self-healing fallback: a relation naming no rule keeps
+            // the words as a new rule.
             traces.push(format!("⚠ {relation:?} on missing rule [{target_id}]; storing as novel"));
             keep_rule(graph, id, words, now, evidence, traces)
         }
-        (RuleRelation::Duplicate, true) => {
+        (RuleRelation::Duplicate, RuleTarget::Standing) => {
             // The words stand as they are; the batch's source joins what
-            // the rule cites, so a retract takes it too.
+            // the rule cites, so a forget takes it too.
             let leaf = graph.leaves.get_mut(&target_id).expect("standing");
             attach_evidence(&mut leaf.evidence, evidence);
             traces.push(format!("≡ duplicate of rule [{target_id}] (no change)"));
             RuleEffect::Duplicate { id: target_id, text: leaf.text.clone() }
         }
-        (RuleRelation::Retract, true) => {
-            // The user withdrew it: the rule leaves the standing rules and
-            // nothing else moves. The stream keeps the turn that gave it
-            // and the turn that withdrew it — that history is the user's;
-            // only a forget erases.
-            let gone = graph.leaves.remove(&target_id).expect("standing");
-            traces.push(format!("✗ rule retracted [{}] — {}", target_id, gone.text));
-            RuleEffect::Retracted { id: target_id, text: gone.text }
+        // The user gave a withdrawn rule again, in whichever relation the
+        // harvester read it as: it is in force again under its own id.
+        (RuleRelation::Novel | RuleRelation::Supersedes | RuleRelation::Duplicate, RuleTarget::Withdrawn) => {
+            let leaf = graph.leaves.get_mut(&target_id).expect("withdrawn");
+            reinstate_rule(leaf, words, now, evidence, traces)
         }
-        (RuleRelation::Retract, false) => {
+        (RuleRelation::Retract, RuleTarget::Standing) => {
+            // The user withdrew it: out of force and out of every prompt,
+            // on record under its id. Nothing else moves; only a forget
+            // erases.
+            let leaf = graph.leaves.get_mut(&target_id).expect("standing");
+            retract_rule(leaf, words.occurred_at.unwrap_or(now), now, evidence, traces)
+        }
+        (RuleRelation::Retract, RuleTarget::Withdrawn) => {
+            // Withdrawing it again changes nothing and answers the same.
+            let leaf = graph.leaves.get_mut(&target_id).expect("withdrawn");
+            attach_evidence(&mut leaf.evidence, evidence);
+            traces.push(format!("≡ rule [{target_id}] already withdrawn (no change)"));
+            RuleEffect::Retracted { id: target_id, text: leaf.text.clone() }
+        }
+        (RuleRelation::Retract, RuleTarget::Absent) => {
             traces.push(format!("⚠ retract of unknown rule [{target_id}]; skipped"));
             return;
         }
@@ -1772,12 +1844,79 @@ mod tests {
             applied.rules[0].effect,
             RuleEffect::Retracted { id: "five-lines".into(), text: "keep replies to three lines".into() }
         );
-        assert!(!g.leaves.contains_key("five-lines"));
-        assert_eq!(g.episodes.len(), 1, "the stream keeps the turn that gave it: a retract erases nothing");
+        assert!(g.rules().is_empty(), "out of force");
+        assert!(g.leaves["five-lines"].is_withdrawn_rule(), "on record");
+        assert_eq!(g.episodes.len(), 1, "a retract erases nothing");
         assert!(g.distillants.values().all(|d| d.forgotten_at == 0), "no distillant held it, none is stamped");
         let applied = apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "i-4")], 3_500);
+        assert!(matches!(applied.rules[0].effect, RuleEffect::Retracted { .. }), "withdrawing it again answers the same: {:?}", applied.rules);
+        assert_eq!(applied.rules[0].instruction.as_deref(), Some("i-4"));
+        let applied = apply_ops(&mut g, vec![rule_op("never-was", "", RuleRelation::Retract, "never-was", "i-5")], 3_600);
         assert!(applied.rules.is_empty(), "retracting nothing answers nothing");
         assert!(applied.traces.iter().any(|t| t.contains("retract of unknown rule")), "{:?}", applied.traces);
+    }
+
+    #[test]
+    fn a_withdrawn_rule_is_out_of_every_prompt_and_on_record() {
+        let mut g = Graph::seed();
+        apply_ops(&mut g, vec![rule_op("no-emoji", "stop using emoji", RuleRelation::Novel, "", "")], 1_000);
+        apply_ops(&mut g, vec![rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", "")], 1_000);
+        apply_ops(&mut g, vec![rule_op("no-emoji", "", RuleRelation::Retract, "no-emoji", "")], 2_000);
+
+        let pinned = projection::render_rules(&g).expect("one rule stands");
+        assert!(pinned.contains("[five-lines]") && !pinned.contains("no-emoji"), "the pinned block lists rules in force only: {pinned}");
+        assert_eq!(projection::render_rules(&g), projection::render_rules(&g), "and stays byte-stable");
+        let open = projection::render_open(&g, projection::RULES, 3_000 + 86_400 * 3);
+        assert!(open.contains("- [five-lines] keep replies to five lines (given"), "{open}");
+        assert!(open.contains("Withdrawn"), "{open}");
+        assert!(open.contains("- [no-emoji] stop using emoji (withdrawn 3d ago)"), "{open}");
+        assert!(open.find("[five-lines]").unwrap() < open.find("[no-emoji]").unwrap(), "in force before withdrawn");
+        let harvester = build_user_message(&g, &HarvestInput::turn("hi", "hello"), 3_000, DirectoryScope::Selective);
+        let rules_section = harvester.split("# Standing rules").nth(1).unwrap().split("# Profile axes").next().unwrap();
+        assert!(rules_section.contains("- [five-lines] keep replies to five lines\nWithdrawn (out of force"), "{rules_section}");
+        assert!(rules_section.contains("- [no-emoji] stop using emoji"), "the harvester sees withdrawn rules by id: {rules_section}");
+        assert!(crate::consolidate::stats(&g).contains("(1 rules, 1 withdrawn)"), "{}", crate::consolidate::stats(&g));
+
+        apply_ops(&mut g, vec![rule_op("no-emoji", "", RuleRelation::Retract, "no-emoji", "")], 2_500);
+        assert_eq!(g.withdrawn_rules().len(), 1, "no duplicate on record");
+        let gone = g.forget("no-emoji", 4_000).expect("on record");
+        assert_eq!(gone.leaves, vec!["no-emoji"], "the user's forget erases a withdrawn rule");
+        assert!(g.withdrawn_rules().is_empty());
+    }
+
+    #[test]
+    fn giving_a_withdrawn_rule_again_reinstates_it_under_its_id() {
+        for relation in [RuleRelation::Novel, RuleRelation::Supersedes, RuleRelation::Duplicate] {
+            let mut g = Graph::seed();
+            apply_ops(&mut g, vec![rule_op("no-emoji", "stop using emoji", RuleRelation::Novel, "", "i-1")], 1_000);
+            apply_ops(&mut g, vec![rule_op("no-emoji", "", RuleRelation::Retract, "no-emoji", "i-2")], 2_000);
+            let target = if relation == RuleRelation::Novel { "" } else { "no-emoji" };
+            let ep = Op::Episode { text: "asked for no emoji again".into(), tags: vec![], occurred_at: None };
+            let applied = apply_ops(&mut g, vec![ep, rule_op("no-emoji", "no emoji, please", relation, target, "i-3")], 3_000);
+            assert_eq!(
+                applied.rules[0].effect,
+                RuleEffect::Reinstated { id: "no-emoji".into(), text: "no emoji, please".into() },
+                "{relation:?}"
+            );
+            assert_eq!(applied.rules[0].instruction.as_deref(), Some("i-3"), "{relation:?}");
+            let rule = &g.leaves["no-emoji"];
+            assert!(rule.is_standing_rule(), "{relation:?}: in force again");
+            assert_eq!(rule.text, "no emoji, please");
+            assert_eq!(rule.kind.history()[0].value, "stop using emoji", "{relation:?}: the withdrawn words are history");
+            assert_eq!(rule.evidence.len(), 1, "{relation:?}: cites the turn that gave it again");
+            assert_eq!(rule.updated_at, 3_000);
+            let LeafKind::Rule(kind) = &rule.kind else { unreachable!() };
+            assert_eq!(kind.instruction.as_deref(), Some("i-3"));
+            assert_eq!(g.rules().len(), 1, "{relation:?}: one rule, not a second");
+            assert!(projection::render_rules(&g).unwrap().contains("- [no-emoji] no emoji, please (was: stop using emoji)"));
+        }
+        // The same words again: reinstated with no history entry.
+        let mut g = Graph::seed();
+        apply_ops(&mut g, vec![rule_op("no-emoji", "stop using emoji", RuleRelation::Novel, "", "")], 1_000);
+        apply_ops(&mut g, vec![rule_op("no-emoji", "", RuleRelation::Retract, "no-emoji", "")], 2_000);
+        apply_ops(&mut g, vec![rule_op("no-emoji", "stop using emoji", RuleRelation::Novel, "", "")], 3_000);
+        assert!(g.leaves["no-emoji"].is_standing_rule());
+        assert!(g.leaves["no-emoji"].kind.history().is_empty(), "same words: nothing superseded");
     }
 
     #[test]
@@ -1785,13 +1924,17 @@ mod tests {
         let documents = vec![Document {
             name: "USER.md".into(),
             text: "Lives in Lisbon. Opened North studio on 2024-01-02. Never use exclamation marks. Keep replies short.".into(),
+            written_at: Some(86_400 * 100),
         }];
         let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
         let mut graph = Graph::seed();
-        let prompt = render_harvest_prompt(&graph, &input, 1_000);
+        let now = 86_400 * 500;
+        let prompt = render_harvest_prompt(&graph, &input, now);
         assert!(prompt.contains("# Documents to import"));
         assert!(!prompt.contains("# Instructions to resolve"));
         assert!(prompt.contains("EACH independent explicit standing instruction"));
+        assert!(prompt.contains("## USER.md (written 1.1y ago)"), "the harvester reads the words as of when they were written: {prompt}");
+        assert!(prompt.contains("memory newer than the document outranks it"));
         let ops = parse_ops(&json!({
             "states": [{"id": "city", "distillants": ["reg.home"], "text": "Lives in Lisbon", "relation": "novel", "target": "", "importance": 0.7, "aliases": ["Lisbon"]}],
             "episodes": [{"text": "Opened North studio on 2024-01-02", "tags": [], "occurred_at": 1704153600}],
@@ -1800,25 +1943,17 @@ mod tests {
                 {"id": "length", "text": "Keep replies short", "relation": "novel", "target": ""}
             ]
         }).to_string()).unwrap();
-        let applied = apply_harvest(&mut graph, ops, &input, 1_000);
+        let applied = apply_ops(&mut graph, ops, 1_000);
         assert_eq!(graph.leaves["city"].text, "Lives in Lisbon");
         assert_eq!(graph.rules().len(), 2);
         assert_eq!(applied.rules.len(), 2);
-        assert!(graph.episodes.iter().any(|episode| episode.occurred_at == Some(1704153600)));
-        let marker = graph.episodes.iter().find(|episode| episode.text == import_marker(&documents[0].name)).expect("the import is marked");
-        assert!(!marker.text.contains("Lisbon"), "the body stays with the host: {}", marker.text);
-        assert!(graph.leaves["city"].evidence.contains(&marker.id), "what the import produced cites the marker");
+        assert_eq!(graph.episodes.len(), 1, "the dated experience is the only episode: the import itself is not an event");
+        assert_eq!(graph.episodes[0].occurred_at, Some(1704153600));
         assert!(resolve(&[], &applied).is_empty(), "imports have no Rule-only verdict");
-    }
 
-    #[test]
-    fn a_successful_empty_extraction_still_marks_the_import() {
-        let documents = vec![Document { name: "journal.md".into(), text: "A quiet day at North studio.".into() }];
-        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
-        let mut graph = Graph::seed();
-        apply_harvest(&mut graph, Vec::new(), &input, 1_000);
-        assert_eq!(graph.episodes.len(), 1);
-        assert_eq!(graph.episodes[0].text, "Imported saved memory: journal.md");
+        let undated = vec![Document { name: "notes.txt".into(), text: "A quiet day.".into(), written_at: None }];
+        let prompt = render_harvest_prompt(&graph, &HarvestInput { documents: &undated, ..HarvestInput::turn("", "") }, 1_000);
+        assert!(prompt.contains("## notes.txt (written at an unknown time)"), "{prompt}");
     }
 
     #[test]
@@ -1833,7 +1968,7 @@ mod tests {
             parents: vec![],
         }];
         apply_ops(&mut g, ops, 1_000);
-        let documents = vec![Document { name: "USER.md".into(), text: "Lives in Lisbon.".into() }];
+        let documents = vec![Document { name: "USER.md".into(), text: "Lives in Lisbon.".into(), written_at: None }];
         let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
         let prompt = build_user_message(&g, &input, 1_000, DirectoryScope::Selective);
         assert!(prompt.contains("# Documents to import"), "{prompt}");
@@ -1848,23 +1983,28 @@ mod tests {
         belief::strength(g.leaves[id].kind.belief().expect("weighed leaf"))
     }
 
+    /// The host's own record of an import, pushed into the batch as an
+    /// ordinary episode: what the batch's leaves then cite.
+    fn host_import_episode(name: &str) -> Op {
+        Op::Episode { text: format!("Imported notes from {name}"), tags: vec![], occurred_at: None }
+    }
+
     #[test]
     fn a_duplicate_only_import_is_forgotten_with_the_fact_it_restated() {
         let mut g = Graph::seed();
         apply_ops(&mut g, vec![state_op("city", "Lives in Lisbon", Relation::Novel, "")], 1_000);
         let before = g.leaves["city"].clone();
-        let documents = vec![Document { name: "USER.md".into(), text: "Lives in Lisbon.".into() }];
-        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
-        // Two ops in one batch name the same fact: the marker is cited once.
+        // Two ops in one batch name the same fact: the host's episode is cited once.
         let ops = vec![
+            host_import_episode("USER.md"),
             state_op("city-again", "Lives in Lisbon", Relation::Duplicate, "city"),
             state_op("city-thrice", "Lives in Lisbon", Relation::Duplicate, "city"),
         ];
-        apply_harvest(&mut g, ops, &input, 2_000);
-        assert_eq!(g.episodes.len(), 1, "the import marker is the only episode");
-        let marker = g.episodes[0].id.clone();
+        apply_ops(&mut g, ops, 2_000);
+        assert_eq!(g.episodes.len(), 1, "the host's episode is the only one");
+        let source = g.episodes[0].id.clone();
         let after = &g.leaves["city"];
-        assert_eq!(after.evidence, vec![marker.clone()], "a duplicate cites its source, once");
+        assert_eq!(after.evidence, vec![source.clone()], "a duplicate cites its source, once");
         assert_eq!(after.text, before.text);
         assert_eq!(after.updated_at, before.updated_at, "no clock moves on a duplicate");
         assert_eq!(after.occurred_at, before.occurred_at);
@@ -1873,7 +2013,7 @@ mod tests {
 
         apply_ops(&mut g, vec![Op::Forget { target: "city".into() }], 3_000);
         assert!(!g.leaves.contains_key("city"));
-        assert!(g.episodes.is_empty(), "the marker was evidence for nothing else; it goes with the fact");
+        assert!(g.episodes.is_empty(), "the source was evidence for nothing else; it goes with the fact");
     }
 
     #[test]
@@ -1882,28 +2022,27 @@ mod tests {
             let mut g = Graph::seed();
             apply_ops(&mut g, vec![rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", "i-1")], 1_000);
             let before = g.leaves["five-lines"].clone();
-            let documents = vec![Document { name: "USER.md".into(), text: "Keep replies to five lines.".into() }];
-            let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
             let target = if relation == RuleRelation::Duplicate { "five-lines" } else { "" };
-            let applied = apply_harvest(&mut g, vec![rule_op("five-lines", "keep replies to five lines", relation, target, "")], &input, 2_000);
+            let ops = vec![host_import_episode("USER.md"), rule_op("five-lines", "keep replies to five lines", relation, target, "")];
+            let applied = apply_ops(&mut g, ops, 2_000);
             assert!(matches!(applied.rules[0].effect, RuleEffect::Duplicate { .. }), "{relation:?}: {:?}", applied.rules);
             assert_eq!(g.episodes.len(), 1);
-            let marker = g.episodes[0].id.clone();
+            let source = g.episodes[0].id.clone();
             let after = &g.leaves["five-lines"];
-            assert_eq!(after.evidence, vec![marker], "{relation:?}: the duplicate cites its source");
+            assert_eq!(after.evidence, vec![source], "{relation:?}: the duplicate cites its source");
             assert_eq!(after.text, before.text);
             assert_eq!(after.updated_at, before.updated_at, "{relation:?}: no clock moves");
             assert_eq!(after.occurred_at, before.occurred_at);
             assert_eq!(after.kind.history().len(), 0);
 
             apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "")], 3_000);
-            assert!(!g.leaves.contains_key("five-lines"));
+            assert!(g.leaves["five-lines"].is_withdrawn_rule());
             assert_eq!(g.episodes.len(), 1, "{relation:?}: a retract withdraws the rule, not the record of the import");
         }
     }
 
     #[test]
-    fn a_marker_cited_by_a_surviving_leaf_outlives_the_forgotten_one() {
+    fn a_source_cited_by_a_surviving_leaf_outlives_the_forgotten_one() {
         let mut g = Graph::seed();
         apply_ops(
             &mut g,
@@ -1913,19 +2052,18 @@ mod tests {
             ],
             1_000,
         );
-        let documents = vec![Document { name: "USER.md".into(), text: "Lives in Lisbon. Keep replies to five lines.".into() }];
-        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
         let ops = vec![
+            host_import_episode("USER.md"),
             state_op("city-again", "Lives in Lisbon", Relation::Duplicate, "city"),
             rule_op("five-lines", "keep replies to five lines", RuleRelation::Duplicate, "five-lines", ""),
         ];
-        apply_harvest(&mut g, ops, &input, 2_000);
-        let marker = g.episodes[0].id.clone();
-        assert_eq!(g.leaves["city"].evidence, vec![marker.clone()]);
-        assert_eq!(g.leaves["five-lines"].evidence, vec![marker.clone()]);
+        apply_ops(&mut g, ops, 2_000);
+        let source = g.episodes[0].id.clone();
+        assert_eq!(g.leaves["city"].evidence, vec![source.clone()]);
+        assert_eq!(g.leaves["five-lines"].evidence, vec![source.clone()]);
 
         apply_ops(&mut g, vec![Op::Forget { target: "city".into() }], 3_000);
-        assert!(g.episodes.iter().any(|e| e.id == marker), "the rule still cites the marker");
+        assert!(g.episodes.iter().any(|e| e.id == source), "the rule still cites the source");
         apply_ops(&mut g, vec![Op::Forget { target: "five-lines".into() }], 4_000);
         assert!(g.episodes.is_empty(), "the user forgot its last citer; so does it");
     }
@@ -2112,7 +2250,7 @@ mod tests {
         assert!(render_pinned_rules(&g).contains("- [ask-first] ask before any spend over $20"));
         let stats = crate::consolidate::stats(&g);
         assert!(!stats.contains("ask-first"), "a rule builds no pressure anywhere: {stats}");
-        assert!(stats.contains("(1 rules)"), "{stats}");
+        assert!(stats.contains("(1 rules, 0 withdrawn)"), "{stats}");
         // The user's forget covers a rule like any leaf.
         let ops = parse_ops(&json!({"forgets": [{"target": "ask-first"}]}).to_string()).unwrap();
         apply_ops(&mut g, ops, 4_000);
