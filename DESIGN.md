@@ -73,7 +73,9 @@ lines", "ask before any spend over $20". It carries no belief, no salience, no p
 nothing inferred moves one. Routing, projection, and consolidation all walk by parent,
 so a rule is invisible to every mechanism that weighs evidence, by construction rather
 than by exemption. The one thing that changes a rule is the user changing it: a later
-instruction supersedes its wording (the old words stay as history) or retracts it.
+instruction supersedes its wording (the old words stay as history) or retracts it. A
+retract withdraws the rule and touches nothing else — the stream keeps the turn that
+gave it and the turn that withdrew it; erasing is a forget, and only the user asks for one.
 
 The stream is the **shared evidence pool**: one episode ("paid rent late in May") supports a
 registry history and nudges a profile axis. Both trees hold pointers into it; episodes are

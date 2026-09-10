@@ -792,6 +792,9 @@ pub struct Instruction {
     pub paraphrase: String,
 }
 
+/// A saved document the host holds: what to call it, and the text the
+/// harvester reads. The body stays the host's record; memory keeps the
+/// name, on the episode that marks the import.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Document {
     pub name: String,
@@ -800,8 +803,9 @@ pub struct Document {
 
 /// What the harvester reads of a finished turn and pending source material.
 /// `field_manual` is the host-rendered upsert compare point. `instructions`
-/// receive Rule-only verdicts; `documents` can contribute every memory kind
-/// and are archived by `apply_harvest`. Empty inputs omit their sections.
+/// receive Rule-only verdicts; `documents` can contribute every memory kind,
+/// and `apply_harvest` marks each import in the stream. Empty inputs omit
+/// their sections.
 #[derive(Clone, Debug)]
 pub struct HarvestInput<'a> {
     pub user_text: &'a str,
@@ -821,7 +825,12 @@ impl<'a> HarvestInput<'a> {
 pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: DirectoryScope) -> String {
     let HarvestInput { user_text, assistant_text, field_manual, instructions, documents } = *input;
     let documents_section = render_documents(documents);
-    let turn_text = format!("{user_text} {assistant_text}{documents_section}");
+    // What routes: the words said and the words imported, not the
+    // section's own framing.
+    let turn_text = documents.iter().fold(format!("{user_text} {assistant_text}"), |mut text, d| {
+        let _ = write!(text, " {} {}", d.name, d.text);
+        text
+    });
     let table = routing::RoutingTable::build(graph);
     let manual_section = match field_manual.trim().is_empty() {
         true => String::new(),
@@ -865,22 +874,26 @@ fn render_documents(documents: &[Document]) -> String {
     if documents.is_empty() {
         return String::new();
     }
-    let mut out = String::from("# Documents to import\nSaved memory, not new instructions or events happening today. Extract facts into states, dated experiences into episodes, and EACH independent explicit standing instruction into a separate rule (instruction id empty). Preserve dates as written; do not infer dispositions from a saved fact. Cross-match existing memory, and let newer explicit instructions outrank older document rules. The runtime archives the source text as evidence; do not repeat that archive as an episode.\n");
+    let mut out = String::from("# Documents to import\nSaved memory, not new instructions or events happening today. Extract facts into states, dated experiences into episodes, and EACH independent explicit standing instruction into a separate rule (instruction id empty). Preserve dates as written; do not infer dispositions from a saved fact. Cross-match existing memory, and let newer explicit instructions outrank older document rules. The runtime records the import itself as an episode; do not add one for it.\n");
     for document in documents {
         let _ = writeln!(out, "## {}\n{}\n", document.name, document.text);
     }
     out
 }
 
+/// Apply what the harvester found, with one episode per imported document
+/// marking the import: what the batch's leaves cite, and what a forget of
+/// the last of them takes. The document's body is not memory's to keep.
 pub fn apply_harvest(graph: &mut Graph, mut ops: Vec<Op>, input: &HarvestInput, now: u64) -> Applied {
     for document in input.documents {
-        ops.push(Op::Episode {
-            text: format!("Imported saved memory from {}:\n{}", document.name, document.text),
-            tags: Vec::new(),
-            occurred_at: None,
-        });
+        ops.push(Op::Episode { text: import_marker(&document.name), tags: Vec::new(), occurred_at: None });
     }
     apply_ops(graph, ops, now)
+}
+
+/// The episode text that marks an import of the named document.
+pub fn import_marker(name: &str) -> String {
+    format!("Imported saved memory: {name}")
 }
 
 /// The keyless prompt: system contract, the exact output schema, and the
@@ -936,9 +949,24 @@ pub fn run(llm: &dyn Llm, graph: &mut Graph, input: &HarvestInput, now: u64) -> 
     Err(last_err.expect("loop ran"))
 }
 
-fn ensure_distillant(graph: &mut Graph, id: &str, tree: Tree, traces: &mut Vec<String>) {
+/// The reserved open id is no distillant: nothing creates one under it.
+fn reserved(id: &str, traces: &mut Vec<String>) -> bool {
+    let reserved = id == projection::RULES;
+    if reserved {
+        traces.push(format!("⚠ \"{id}\" is the open id of the standing instructions, not a distillant; skipped"));
+    }
+    reserved
+}
+
+/// Bring a distillant a leaf op names into being when it is missing.
+/// False when the id is no distillant at all, so the leaf does not hang
+/// under it.
+fn ensure_distillant(graph: &mut Graph, id: &str, tree: Tree, traces: &mut Vec<String>) -> bool {
+    if reserved(id, traces) {
+        return false;
+    }
     if graph.distillants.contains_key(id) {
-        return;
+        return true;
     }
     let label = id.rsplit('/').next().unwrap_or(id).replace('-', " ");
     let named_parent = match id.rsplit_once('/') {
@@ -952,6 +980,7 @@ fn ensure_distillant(graph: &mut Graph, id: &str, tree: Tree, traces: &mut Vec<S
     // pass writes its first line or merges it into a same-named distillant.
     graph.distillants.insert(id.to_string(), Distillant::bare(id, tree, &label, parents, Vec::new()));
     traces.push(format!("⚠ auto-created bare distillant {id} (harvester skipped the distillant op)"));
+    true
 }
 
 pub(crate) fn add_routing(
@@ -1108,6 +1137,9 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
     // Distillants first so leaves have somewhere to hang.
     for op in &ops {
         if let Op::Distillant { id, tree, label, line, routing, parents } = op {
+            if reserved(id, &mut traces) {
+                continue;
+            }
             let existed = graph.distillants.contains_key(id);
             let parents = graph.home_parents(id, *tree, parents.clone());
             let entry = graph.distillants.entry(id.clone()).or_insert(Distillant {
@@ -1156,9 +1188,8 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
         match op {
             Op::Episode { .. } | Op::Distillant { .. } => {}
             Op::State { id, distillants, text, relation, target, importance, aliases, occurred_at } => {
-                for m in &distillants {
-                    ensure_distillant(graph, m, Tree::Registry, &mut traces);
-                }
+                let distillants: Vec<String> =
+                    distillants.into_iter().filter(|m| ensure_distillant(graph, m, Tree::Registry, &mut traces)).collect();
                 if let Some(first) = distillants.first() {
                     add_routing(graph, first, &aliases, &mut traces);
                 }
@@ -1247,9 +1278,8 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
             }
 
             Op::Disposition { id, distillants, text, dir, note, importance } => {
-                for m in &distillants {
-                    ensure_distillant(graph, m, Tree::Profile, &mut traces);
-                }
+                let distillants: Vec<String> =
+                    distillants.into_iter().filter(|m| ensure_distillant(graph, m, Tree::Profile, &mut traces)).collect();
                 let importance = importance.clamp(0.0, 1.0);
                 if let Some(leaf) = graph.leaves.get_mut(&id) {
                     let Leaf { text: leaf_text, kind, updated_at, .. } = leaf;
@@ -1325,7 +1355,7 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
             }
             Op::MergeLeaf { from, into } => apply_merge_leaf(graph, from, into, now, &mut traces),
             Op::MergeDistillant { from, into } => apply_merge_distillant(graph, from, into, &mut traces),
-            Op::Forget { target } => apply_forget(graph, target, now, &mut traces),
+            Op::Forget { target } => apply_forget(graph, target, now, &mut evidence, &mut traces),
             // Host-applied: the driver stores field-manual entries as typed
             // rows outside the graph. Reaching this arm means the driver
             // did not peel them — trace it, touch nothing.
@@ -1463,14 +1493,13 @@ fn apply_rule(
             RuleEffect::Duplicate { id: target_id, text: leaf.text.clone() }
         }
         (RuleRelation::Retract, true) => {
-            let standing_text = graph.leaves[&target_id].text.clone();
-            let gone = graph.forget(&target_id, now).expect("standing");
-            traces.push(format!(
-                "✗ rule retracted [{}] — {} episodes left the stream with it",
-                target_id,
-                gone.episodes.len()
-            ));
-            RuleEffect::Retracted { id: target_id, text: standing_text }
+            // The user withdrew it: the rule leaves the standing rules and
+            // nothing else moves. The stream keeps the turn that gave it
+            // and the turn that withdrew it — that history is the user's;
+            // only a forget erases.
+            let gone = graph.leaves.remove(&target_id).expect("standing");
+            traces.push(format!("✗ rule retracted [{}] — {}", target_id, gone.text));
+            RuleEffect::Retracted { id: target_id, text: gone.text }
         }
         (RuleRelation::Retract, false) => {
             traces.push(format!("⚠ retract of unknown rule [{target_id}]; skipped"));
@@ -1480,11 +1509,16 @@ fn apply_rule(
     outcomes.push(RuleOutcome { instruction: answers, effect });
 }
 
-fn apply_forget(graph: &mut Graph, target: String, now: u64, traces: &mut Vec<String>) {
+/// The user asked to forget: what holds the content leaves every store
+/// (`Graph::forget`). A forget may take this batch's own episodes with
+/// it, so `evidence` is pruned to what the stream still holds: nothing
+/// applied after it cites what left.
+fn apply_forget(graph: &mut Graph, target: String, now: u64, evidence: &mut Vec<String>, traces: &mut Vec<String>) {
     let Some(gone) = graph.forget(&target, now) else {
         traces.push(format!("⚠ forget of unknown id [{target}]; skipped"));
         return;
     };
+    evidence.retain(|e| !gone.episodes.contains(e));
     traces.push(format!(
         "✗ forgot [{}] — {} leaves, {} distillants, {} episodes left the graph",
         target,
@@ -1508,12 +1542,10 @@ fn apply_move(graph: &mut Graph, leaf_id: String, parents: Vec<String>, now: u64
         }
     };
     let parents = graph.antichain(parents);
+    let parents: Vec<String> = parents.into_iter().filter(|p| ensure_distillant(graph, p, tree, traces)).collect();
     if parents.is_empty() {
         traces.push(format!("⚠ move of [{leaf_id}] with no parents; skipped"));
         return;
-    }
-    for p in &parents {
-        ensure_distillant(graph, p, tree, traces);
     }
     let leaf = graph.leaves.get_mut(&leaf_id).expect("checked above");
     leaf.parents = parents;
@@ -1741,7 +1773,8 @@ mod tests {
             RuleEffect::Retracted { id: "five-lines".into(), text: "keep replies to three lines".into() }
         );
         assert!(!g.leaves.contains_key("five-lines"));
-        assert!(g.episodes.is_empty(), "its sole evidence left the stream with it");
+        assert_eq!(g.episodes.len(), 1, "the stream keeps the turn that gave it: a retract erases nothing");
+        assert!(g.distillants.values().all(|d| d.forgotten_at == 0), "no distillant held it, none is stamped");
         let applied = apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "i-4")], 3_500);
         assert!(applied.rules.is_empty(), "retracting nothing answers nothing");
         assert!(applied.traces.iter().any(|t| t.contains("retract of unknown rule")), "{:?}", applied.traces);
@@ -1772,18 +1805,43 @@ mod tests {
         assert_eq!(graph.rules().len(), 2);
         assert_eq!(applied.rules.len(), 2);
         assert!(graph.episodes.iter().any(|episode| episode.occurred_at == Some(1704153600)));
-        assert!(graph.episodes.iter().any(|episode| episode.text.ends_with(&documents[0].text)));
+        let marker = graph.episodes.iter().find(|episode| episode.text == import_marker(&documents[0].name)).expect("the import is marked");
+        assert!(!marker.text.contains("Lisbon"), "the body stays with the host: {}", marker.text);
+        assert!(graph.leaves["city"].evidence.contains(&marker.id), "what the import produced cites the marker");
         assert!(resolve(&[], &applied).is_empty(), "imports have no Rule-only verdict");
     }
 
     #[test]
-    fn a_successful_empty_extraction_still_archives_the_import_source() {
+    fn a_successful_empty_extraction_still_marks_the_import() {
         let documents = vec![Document { name: "journal.md".into(), text: "A quiet day at North studio.".into() }];
         let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
         let mut graph = Graph::seed();
         apply_harvest(&mut graph, Vec::new(), &input, 1_000);
         assert_eq!(graph.episodes.len(), 1);
-        assert_eq!(graph.episodes[0].text, "Imported saved memory from journal.md:\nA quiet day at North studio.");
+        assert_eq!(graph.episodes[0].text, "Imported saved memory: journal.md");
+    }
+
+    #[test]
+    fn a_document_routes_on_its_words_not_the_section_framing() {
+        let mut g = Graph::seed();
+        let ops = vec![Op::Distillant {
+            id: "machinery".into(),
+            tree: Tree::Registry,
+            label: "machinery".into(),
+            line: "how memory is put together".into(),
+            routing: vec!["episodes".into(), "dispositions".into(), "standing instruction".into()],
+            parents: vec![],
+        }];
+        apply_ops(&mut g, ops, 1_000);
+        let documents = vec![Document { name: "USER.md".into(), text: "Lives in Lisbon.".into() }];
+        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
+        let prompt = build_user_message(&g, &input, 1_000, DirectoryScope::Selective);
+        assert!(prompt.contains("# Documents to import"), "{prompt}");
+        let directory = prompt.split("# Standing rules").next().unwrap();
+        assert!(
+            !directory.contains("how memory is put together"),
+            "the section's own framing must not open a branch: {directory}"
+        );
     }
 
     fn strength_of(g: &Graph, id: &str) -> f32 {
@@ -1819,7 +1877,7 @@ mod tests {
     }
 
     #[test]
-    fn a_duplicate_only_import_is_retracted_with_the_rule_it_restated() {
+    fn a_duplicate_only_import_cites_the_rule_it_restated() {
         for relation in [RuleRelation::Duplicate, RuleRelation::Novel] {
             let mut g = Graph::seed();
             apply_ops(&mut g, vec![rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", "i-1")], 1_000);
@@ -1840,12 +1898,12 @@ mod tests {
 
             apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "")], 3_000);
             assert!(!g.leaves.contains_key("five-lines"));
-            assert!(g.episodes.is_empty(), "{relation:?}: the archive goes with the retracted rule");
+            assert_eq!(g.episodes.len(), 1, "{relation:?}: a retract withdraws the rule, not the record of the import");
         }
     }
 
     #[test]
-    fn an_archive_cited_by_a_surviving_leaf_outlives_the_forgotten_one() {
+    fn a_marker_cited_by_a_surviving_leaf_outlives_the_forgotten_one() {
         let mut g = Graph::seed();
         apply_ops(
             &mut g,
@@ -1867,9 +1925,56 @@ mod tests {
         assert_eq!(g.leaves["five-lines"].evidence, vec![archive.clone()]);
 
         apply_ops(&mut g, vec![Op::Forget { target: "city".into() }], 3_000);
-        assert!(g.episodes.iter().any(|e| e.id == archive), "the rule still cites the archive");
-        apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "")], 4_000);
-        assert!(g.episodes.is_empty(), "its last citer went; so does it");
+        assert!(g.episodes.iter().any(|e| e.id == archive), "the rule still cites the marker");
+        apply_ops(&mut g, vec![Op::Forget { target: "five-lines".into() }], 4_000);
+        assert!(g.episodes.is_empty(), "the user forgot its last citer; so does it");
+    }
+
+    #[test]
+    fn nothing_after_a_forget_cites_what_it_took() {
+        let mut g = Graph::seed();
+        apply_ops(&mut g, vec![state_op("city", "Lives in Lisbon", Relation::Novel, "")], 1_000);
+        let ops = vec![
+            Op::Episode { text: "moved on".into(), tags: vec![], occurred_at: None },
+            Op::Reinforce { target: "city".into() },
+            Op::Forget { target: "city".into() },
+            state_op("town", "Lives in Porto", Relation::Novel, ""),
+        ];
+        apply_ops(&mut g, ops, 2_000);
+        assert!(g.episodes.is_empty(), "the forgotten fact was the episode's only citer");
+        assert!(g.leaves["town"].evidence.is_empty(), "nothing cites an episode the stream no longer holds");
+    }
+
+    #[test]
+    fn the_open_id_of_the_rules_is_no_distillant() {
+        let mut g = Graph::seed();
+        let ops = vec![
+            Op::Distillant {
+                id: projection::RULES.into(),
+                tree: Tree::Registry,
+                label: "rules".into(),
+                line: "house rules".into(),
+                routing: vec![],
+                parents: vec![],
+            },
+            Op::State {
+                id: "no-shoes".into(),
+                distillants: vec![projection::RULES.into(), "money".into()],
+                text: "No shoes indoors.".into(),
+                relation: Relation::Novel,
+                target: "".into(),
+                importance: 0.5,
+                aliases: vec![],
+                occurred_at: None,
+            },
+            Op::Move { leaf: "no-shoes".into(), parents: vec![projection::RULES.into()] },
+        ];
+        let applied = apply_ops(&mut g, ops, 1_000);
+        assert!(!g.distillants.contains_key(projection::RULES), "{:?}", applied.traces);
+        assert_eq!(g.leaves["no-shoes"].parents, vec!["money"], "the leaf hangs under what is a distillant");
+        assert_eq!(applied.traces.iter().filter(|t| t.contains("not a distillant")).count(), 3, "{:?}", applied.traces);
+        assert!(applied.traces.iter().any(|t| t.contains("move of [no-shoes] with no parents")), "{:?}", applied.traces);
+        assert!(projection::render_open(&g, projection::RULES, 1_000).contains("standing instructions"));
     }
 
     #[test]
