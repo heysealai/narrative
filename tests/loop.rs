@@ -193,3 +193,50 @@ fn an_instruction_becomes_a_pinned_rule_the_next_turn_reads() {
     assert_eq!(graph.rules().len(), 1, "one rule, reworded");
     assert!(projection::project(&graph, "five lines?", t + 120).opened.is_empty(), "no routing reaches a rule");
 }
+
+#[test]
+fn a_retired_document_rides_pinned_whole_the_next_turn() {
+    // A host retires a workflows document into the harvest as a document
+    // (no turn, no instruction to resolve). The scripted flow lands as one
+    // rule carrying every step, the default beside it as its own rule, the
+    // priced setting as a state with its figure — and the next turn's
+    // system prompt carries the flow whole, so the rule can be followed
+    // from the pinned block without the archive.
+    let t = now();
+    let mut graph = Graph::seed();
+    let documents = vec![harvest::Document {
+        name: "WORKFLOWS.md".into(),
+        text: "## Plant Tracker — Demo Conversation Flow\n- Trigger: the user says \"make a plant tracker\".\n- This is a SCRIPTED DEMO FLOW. Follow it exactly, in order:\n  Step 1 — Assistant asks: \"which plants, and how often do you water them?\"\n  Step 2 — User names the plants; assistant asks whether to send a reminder by email.\n  Step 3 — User says yes; assistant proposes a schedule and asks to confirm.\n  Step 4 — User confirms; assistant creates the standing order and renders the plant journal card in the same reply.\n- Defaults: prefer email for reminders.\n- Reminder service: Pingly (~$0.02 per reminder)\n".into(),
+        written_at: Some(t - 86_400 * 30),
+    }];
+    let flow = "When the user says \"make a plant tracker\", follow this scripted demo flow exactly, in order:\nStep 1 — Assistant asks: \"which plants, and how often do you water them?\"\nStep 2 — User names the plants; assistant asks whether to send a reminder by email.\nStep 3 — User says yes; assistant proposes a schedule and asks to confirm.\nStep 4 — User confirms; assistant creates the standing order and renders the plant journal card in the same reply.";
+    let imported = json!({
+        "rules": [
+            {"id": "plant-tracker-demo-flow", "text": flow, "relation": "novel", "target": "", "instruction": "", "occurred_at": null},
+            {"id": "reminders-by-email", "text": "Prefer email for reminders", "relation": "novel", "target": "", "instruction": "", "occurred_at": null}
+        ],
+        "states": [
+            {"id": "pingly-price", "distillants": ["money"], "text": "Pingly reminders cost ~$0.02 per reminder",
+             "relation": "novel", "target": "", "importance": 0.6, "aliases": ["Pingly"], "occurred_at": null}
+        ]
+    });
+    let llm = MockLlm::scripted(vec![json!([{"type": "text", "text": imported.to_string()}])]);
+
+    let input = harvest::HarvestInput { documents: &documents, ..harvest::HarvestInput::turn("", "") };
+    let applied = harvest::run(&llm, &mut graph, &input, t).unwrap();
+    assert_eq!(applied.rules.len(), 2, "{:?}", applied.traces);
+    assert!(harvest::resolve(&[], &applied).is_empty(), "an import answers no instruction");
+    assert_eq!(graph.rules().len(), 2);
+    assert_eq!(graph.leaves["plant-tracker-demo-flow"].text, flow);
+    assert_eq!(graph.leaves["pingly-price"].text, "Pingly reminders cost ~$0.02 per reminder");
+    assert!(graph.episodes.is_empty(), "the import is not an event");
+
+    let system = agent::build_system(&graph);
+    let rules = &system[system.find("# Standing instructions").expect("rules ride pinned")..];
+    for step in ["Step 1 — Assistant asks", "Step 2 — User names the plants", "Step 3 — User says yes", "Step 4 — User confirms"] {
+        assert!(rules.contains(step), "{step} rides pinned with the rule that invokes it: {rules}");
+    }
+    assert!(rules.contains("- [reminders-by-email] Prefer email for reminders"), "{rules}");
+    assert_eq!(agent::build_system(&graph), system, "the pinned block is a pure function of the graph");
+    assert!(projection::project(&graph, "make a plant tracker", t + 60).opened.is_empty(), "no routing reaches a rule");
+}

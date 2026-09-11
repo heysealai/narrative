@@ -69,8 +69,10 @@ late-month`). Split by species, each in its native topology:
 | **Rules** | flat list, under no tree | rules | the user's standing instructions in their own words; binding on first occurrence, superseded, withdrawn or reinstated only by a later instruction |
 
 A rule is what the user *said*, not what the engine inferred: "keep replies to five
-lines", "ask before any spend over $20". It carries no belief, no salience, no parent —
-nothing inferred moves one. Routing, projection, and consolidation all walk by parent,
+lines", "ask before any spend over $20". A procedure the user gives — a trigger with
+steps — is one rule carrying every step in order, however long: the steps are the
+instruction, and a rule that names a flow without its body cannot be followed. It carries
+no belief, no salience, no parent — nothing inferred moves one. Routing, projection, and consolidation all walk by parent,
 so a rule is invisible to every mechanism that weighs evidence, by construction rather
 than by exemption. The one thing that changes a rule is the user changing it: a later
 instruction supersedes its wording (the old words stay as history), retracts it, or

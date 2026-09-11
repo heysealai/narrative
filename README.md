@@ -71,7 +71,13 @@ lines, the runtime compiles them.
 Saved documents enter separately through `HarvestInput.documents`, never
 through the Rule-only instruction-resolution contract. Their facts, dated
 experiences and independent explicit instructions can populate all memory
-kinds. The engine frames each document for the harvester with when it was
+kinds. A retired document is read once, so the import contract asks for
+everything memory can hold: every voice, tone or manner line is a rule of
+its own (a document about the assistant's voice is a list of rules, not
+persona prose); a workflow with steps is one rule carrying its trigger and
+every step verbatim, since a rule that names a flow without its body cannot
+be followed; a default ("when X, use Y") is a rule; numbers, units, prices,
+dates and qualifiers ride verbatim. The engine frames each document for the harvester with when it was
 written (`Document.written_at`), so a two-year-old note is read as of then:
 memory newer than the document outranks it, the document's own dates are
 the event time of what it says, and the import itself is not an event. The
