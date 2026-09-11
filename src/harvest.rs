@@ -406,7 +406,7 @@ pub fn ops_schema() -> Value {
                     "type": "object",
                     "properties": {
                         "id": {"type": "string", "description": "kebab-case slug, stable handle; the existing rule's id when relation is supersedes, duplicate or retract, and the withdrawn rule's id when the user gives one again"},
-                        "text": {"type": "string", "description": "the instruction in the user's own words, trimmed to the instruction, present tense; empty for retract"},
+                        "text": {"type": "string", "description": "the instruction in the user's own words, trimmed to the instruction, present tense; a procedure keeps its trigger and every step, in order; empty for retract"},
                         "relation": rule_relation,
                         "target": {"type": "string", "description": "existing rule id this relates to; empty string when novel"},
                         "instruction": {"type": "string", "description": "the id from the 'Instructions to resolve' section this entry answers; empty string when the rule came from ordinary speech"},
@@ -574,7 +574,7 @@ Rules:
 13. Forgetting is the user's call and it is final: when the user asks to forget, delete, or stop remembering something, emit a forgets entry for every leaf or distillant that holds it (find them in the comparanda and the directory) and leave no trace of the content anywhere else in this harvest — no episode recording the request, no state restating it. When nothing stored matches, the harvest simply carries nothing about it.
 14. Lines are retrieval scent: a later question can only descend to a leaf if some line on its path advertises the relevant vocabulary. When a leaf carries evaluative weight — trust, regret, fear, pride, conflict — say so in the line alongside the topic ("sworn companion, sold to the captain — parting is a standing regret"), not just the noun-shape ("proves loyal"). A regret no line mentions is a regret recall cannot find; one the line carries routes automatically — the line is the only place it needs to be. Lines are plain prose about the person — never machinery words ("facet", "routing", "distillant", "leaf"), and never this rule's example wording restated as fact: examples illustrate shape, not content.
 15. The input may carry server-authored worker run digest blocks — operational evidence that background tool calls failed, each line naming a tool, sometimes a service, and the error. Digest content is machinery, not the user's life: it never becomes an episode, state, disposition, or distillant, and its vocabulary never enters routing. Its one product is the FIELD MANUAL: when the evidence teaches something durable about operating a tool or service, emit a manual_upserts entry keyed by that tool and service — the lesson states the wall and the working alternative in plain operating prose. The existing field-manual entries are shown to you; an upsert replaces its entry, so refine with the new evidence rather than restating. When the evidence shows a recorded lesson no longer holds, retire it with manual_retires. A transient one-off failure with nothing durable to teach emits nothing at all.
-16. Rules: a standing instruction is something the user asked for that should hold on every future turn — how to talk to them (register, length, tone, language), how to operate (ask before X, always do Y after Z), a procedure with a trigger, or money judgment that is not a number. A request for this turn only, a fact, a date, a preference you inferred, and a policy number are not rules. The rule's text is the user's own words from the turn, trimmed to the instruction, present tense — never your paraphrase when their words are available. The standing rules are shown to you every time: an instruction that changes one of them supersedes it by id (new wording, same rule) or retracts it (the user withdrew it) — never a second rule saying the same thing. The rules the user withdrew are listed after them: an instruction that gives one of those again names its id (novel, supersedes, or duplicate on that id) and the runtime reinstates it — never a second rule. When the input carries an "Instructions to resolve" section, answer every listed id: exactly one rules entry carrying that instruction id (novel, supersedes, retract, or duplicate of a rule already in force), and no state, disposition, or episode for the same words; an instruction that is not a standing instruction gets no entry at all — the runtime reports it as not kept. Instructions resolve in the order listed. Rules carry no importance, no distillant, and no evidence weighing."#;
+16. Rules: a standing instruction is something the user asked for that should hold on every future turn — how to talk to them (register, length, tone, language), how to operate (ask before X, always do Y after Z), a procedure with a trigger, or money judgment that is not a number. A request for this turn only, a fact, a date, a preference you inferred, and a policy number are not rules. The rule's text is the user's own words from the turn, trimmed to the instruction, present tense — never your paraphrase when their words are available. A procedure's steps are the instruction, not detail to trim: a flow with steps is ONE rule carrying its trigger and every step in order, however long — a rule that names a flow without its steps cannot be followed. The standing rules are shown to you every time: an instruction that changes one of them supersedes it by id (new wording, same rule) or retracts it (the user withdrew it) — never a second rule saying the same thing. The rules the user withdrew are listed after them: an instruction that gives one of those again names its id (novel, supersedes, or duplicate on that id) and the runtime reinstates it — never a second rule. When the input carries an "Instructions to resolve" section, answer every listed id: exactly one rules entry carrying that instruction id (novel, supersedes, retract, or duplicate of a rule already in force), and no state, disposition, or episode for the same words; an instruction that is not a standing instruction gets no entry at all — the runtime reports it as not kept. Instructions resolve in the order listed. Rules carry no importance, no distillant, and no evidence weighing."#;
 
 /// What the harvester sees of the distillant layer. Every scope shows every
 /// distillant BY ID, so a fact can always be filed under an existing node;
@@ -887,15 +887,28 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
     )
 }
 
-/// The documents section: each document under its name with its age, so
-/// the harvester reads its words as of when they were written. Memory
-/// newer than a document outranks it; a document's own dates are the
-/// event time of what it says.
+/// The import contract, under the documents heading: the harvester reads
+/// a retired document once, so everything memory can hold has to leave it
+/// in this one harvest. The lines name the shapes "each instruction
+/// becomes a rule" lets slip on its own: voice and manner lines read as
+/// persona prose, a procedure's steps trimmed away behind a rule that
+/// names it, a default folded into a neighbour, a figure rounded.
+const DOCUMENT_IMPORT_CONTRACT: &str = r#"Saved memory, not new instructions or events happening today. Each document is shown with when it was written: read its words as of then. A retired document is read once and never shown again: what this harvest does not carry out of it is gone, so carry everything memory can hold. Extract facts into states, dated experiences into episodes, and EACH independent explicit standing instruction into a separate rule (instruction id empty).
+- Voice, tone, register and manner lines — how to talk, what to match, what not to perform, what is welcome — are standing instructions: one rule per independent line, in the document's words, whether the document addresses the assistant, describes its persona, or speaks in its own voice. A document about the assistant's voice is a list of rules, never persona prose to skip, and never a disposition to infer.
+- A workflow or procedure — a trigger with steps, a scripted flow, a "when X: do A, then B" — is ONE rule whose text carries the trigger and every step verbatim, in order, however long. A rule that names the flow without its steps is a distortion, not a summary: the steps are the instruction. The settings around a procedure (numbers, addresses, schedules, services) are states beside the rule.
+- A default — "when X, do Y", "prefer Y for X", "always use Y" — is a rule, one per default, never folded into a neighbouring rule.
+- Numbers, units, prices, dates, names, identifiers and qualifiers ride verbatim into the text that holds them: never rounded, summarised, or dropped; two prices in one line are two states.
+A document's dates are the event time (occurred_at) of what it says; preserve them as written, and do not infer dispositions from a saved fact. Cross-match existing memory: memory newer than the document outranks it (a document fact older than the leaf it would supersede supports or duplicates that leaf instead), and newer explicit instructions outrank older document rules. The import is not an event; emit no episode for the document's arrival."#;
+
+/// The documents section: the import contract, then each document under
+/// its name with its age, so the harvester reads its words as of when
+/// they were written. Memory newer than a document outranks it; a
+/// document's own dates are the event time of what it says.
 fn render_documents(documents: &[Document], now: u64) -> String {
     if documents.is_empty() {
         return String::new();
     }
-    let mut out = String::from("# Documents to import\nSaved memory, not new instructions or events happening today. Each document is shown with when it was written: read its words as of then. Extract facts into states, dated experiences into episodes, and EACH independent explicit standing instruction into a separate rule (instruction id empty). A document's dates are the event time (occurred_at) of what it says; preserve them as written, and do not infer dispositions from a saved fact. Cross-match existing memory: memory newer than the document outranks it (a document fact older than the leaf it would supersede supports or duplicates that leaf instead), and newer explicit instructions outrank older document rules. The import is not an event; emit no episode for the document's arrival.\n");
+    let mut out = format!("# Documents to import\n{DOCUMENT_IMPORT_CONTRACT}\n");
     for document in documents {
         let written = match document.written_at {
             Some(at) => format!("written {}", age_str(now, at)),
@@ -1935,6 +1948,23 @@ mod tests {
         assert!(prompt.contains("EACH independent explicit standing instruction"));
         assert!(prompt.contains("## USER.md (written 1.1y ago)"), "the harvester reads the words as of when they were written: {prompt}");
         assert!(prompt.contains("memory newer than the document outranks it"));
+        // The contract rides once, under the heading, before the first document.
+        let section = prompt.split("# Documents to import\n").nth(1).unwrap();
+        let contract = section.split("## USER.md").next().unwrap();
+        assert!(contract.contains("A retired document is read once and never shown again"), "{contract}");
+        assert!(contract.contains("Voice, tone, register and manner lines"), "{contract}");
+        assert!(contract.contains("are standing instructions: one rule per independent line"), "{contract}");
+        assert!(contract.contains("never persona prose to skip, and never a disposition to infer"), "{contract}");
+        assert!(contract.contains("is ONE rule whose text carries the trigger and every step verbatim, in order, however long"), "{contract}");
+        assert!(contract.contains("A rule that names the flow without its steps is a distortion, not a summary"), "{contract}");
+        assert!(contract.contains("is a rule, one per default, never folded into a neighbouring rule"), "{contract}");
+        assert!(contract.contains("Numbers, units, prices, dates, names, identifiers and qualifiers ride verbatim"), "{contract}");
+        assert!(contract.contains("two prices in one line are two states"), "{contract}");
+        // The system contract and the schema say the same of a procedure, for
+        // a flow dictated in conversation as much as one imported.
+        let system = prompt.split("# Output schema").next().unwrap();
+        assert!(system.contains("A procedure's steps are the instruction, not detail to trim"), "{system}");
+        assert!(prompt.contains("a procedure keeps its trigger and every step, in order"), "the schema's rule text says so too");
         let ops = parse_ops(&json!({
             "states": [{"id": "city", "distillants": ["reg.home"], "text": "Lives in Lisbon", "relation": "novel", "target": "", "importance": 0.7, "aliases": ["Lisbon"]}],
             "episodes": [{"text": "Opened North studio on 2024-01-02", "tags": [], "occurred_at": 1704153600}],
@@ -1954,6 +1984,81 @@ mod tests {
         let undated = vec![Document { name: "notes.txt".into(), text: "A quiet day.".into(), written_at: None }];
         let prompt = render_harvest_prompt(&graph, &HarvestInput { documents: &undated, ..HarvestInput::turn("", "") }, 1_000);
         assert!(prompt.contains("## notes.txt (written at an unknown time)"), "{prompt}");
+    }
+
+    /// A voice document, a workflows document and a preferences document
+    /// of the shapes a host retires: a manner section of one-line
+    /// instructions, a scripted flow with numbered steps beside a one-line
+    /// rule that points at it, a research default, priced settings, a
+    /// preference with a qualifier.
+    fn retired_documents() -> Vec<Document> {
+        vec![
+            Document {
+                name: "VOICE.md".into(),
+                text: "# Voice\n## Vibe\n- Keep it short by default.\n- Match Mara's energy — she is casual, fast, uses shorthand. Don't over-formalize.\n- Humor is welcome. Warmth over polish.\n- Don't perform being an assistant. Just be present.\n".into(),
+                written_at: Some(86_400 * 300),
+            },
+            Document {
+                name: "WORKFLOWS.md".into(),
+                text: "# Saved Workflows\n## Research\n- Trigger: the user asks to research a topic.\n- Steps: check the reading catalog first before any web search.\n- Defaults: prefer newsletter sources as the primary research tool.\n\n## Plant Tracker — Demo Conversation Flow\n- Trigger: the user says \"make a plant tracker\".\n- This is a SCRIPTED DEMO FLOW. Follow it exactly, in order:\n  Step 1 — Assistant asks: \"which plants, and how often do you water them?\"\n  Step 2 — User names the plants; assistant asks whether to send a reminder by email.\n  Step 3 — User says yes; assistant proposes a schedule and asks to confirm.\n  Step 4 — User confirms; assistant creates the standing order and renders the plant journal card in the same reply.\n- Timezone for reminders: Europe/Lisbon (7am WET)\n- Reminder service: Pingly (~$0.02 per reminder)\n".into(),
+                written_at: Some(86_400 * 400),
+            },
+            Document {
+                name: "USER.md".into(),
+                text: "# Preferences\n- Wants short answers — three sentences max, even for reflective questions.\n- Prices seen: image generation runs $0.04 per image on Flux; a voice call costs about $0.84 per minute on Ringo.\n".into(),
+                written_at: Some(86_400 * 450),
+            },
+        ]
+    }
+
+    #[test]
+    fn a_retired_document_loses_nothing_memory_can_hold() {
+        let documents = retired_documents();
+        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
+        let mut graph = Graph::seed();
+        let prompt = render_harvest_prompt(&graph, &input, 86_400 * 500);
+        assert!(prompt.contains("## VOICE.md (written 6mo ago)"), "{prompt}");
+        assert!(prompt.contains("Step 4 — User confirms"), "the flow rides whole into the prompt: {prompt}");
+        // What the contract asks for, in the ops it asks for: every manner
+        // line its own rule, the flow one rule with every step, the default
+        // its own rule, every price verbatim, the qualifier kept.
+        let flow = "When the user says \"make a plant tracker\", follow this scripted demo flow exactly, in order:\nStep 1 — Assistant asks: \"which plants, and how often do you water them?\"\nStep 2 — User names the plants; assistant asks whether to send a reminder by email.\nStep 3 — User says yes; assistant proposes a schedule and asks to confirm.\nStep 4 — User confirms; assistant creates the standing order and renders the plant journal card in the same reply.";
+        let ops = parse_ops(&json!({
+            "rules": [
+                {"id": "short-by-default", "text": "Keep it short by default", "relation": "novel", "target": ""},
+                {"id": "match-energy", "text": "Match Mara's energy — she is casual, fast, uses shorthand. Don't over-formalize", "relation": "novel", "target": ""},
+                {"id": "humor-welcome", "text": "Humor is welcome. Warmth over polish", "relation": "novel", "target": ""},
+                {"id": "be-present", "text": "Don't perform being an assistant. Just be present", "relation": "novel", "target": ""},
+                {"id": "research-catalog-first", "text": "When asked to research a topic, check the reading catalog first before any web search", "relation": "novel", "target": ""},
+                {"id": "research-newsletters", "text": "Prefer newsletter sources as the primary research tool", "relation": "novel", "target": ""},
+                {"id": "plant-tracker-demo-flow", "text": flow, "relation": "novel", "target": ""},
+                {"id": "three-sentences", "text": "Wants short answers — three sentences max, even for reflective questions", "relation": "novel", "target": ""}
+            ],
+            "states": [
+                {"id": "plant-reminder-timezone", "distillants": ["life"], "text": "Plant reminders go out in Europe/Lisbon time, at 7am WET", "relation": "novel", "target": "", "importance": 0.6, "aliases": []},
+                {"id": "pingly-price", "distillants": ["money"], "text": "Pingly reminders cost ~$0.02 per reminder", "relation": "novel", "target": "", "importance": 0.6, "aliases": ["Pingly"]},
+                {"id": "flux-price", "distillants": ["money"], "text": "Image generation runs $0.04 per image on Flux", "relation": "novel", "target": "", "importance": 0.6, "aliases": ["Flux"]},
+                {"id": "ringo-price", "distillants": ["money"], "text": "A voice call costs about $0.84 per minute on Ringo", "relation": "novel", "target": "", "importance": 0.6, "aliases": ["Ringo"]}
+            ]
+        }).to_string()).unwrap();
+        let applied = apply_ops(&mut graph, ops, 86_400 * 500);
+        assert_eq!(applied.rules.len(), 8, "{:?}", applied.traces);
+        assert_eq!(graph.rules().len(), 8, "one rule per manner line, per default, per flow, per preference");
+        assert_eq!(graph.leaves["plant-tracker-demo-flow"].text, flow, "the rule holds the flow's every step, unchanged");
+        assert_eq!(graph.leaves["three-sentences"].text, "Wants short answers — three sentences max, even for reflective questions");
+        assert_eq!(graph.leaves["flux-price"].text, "Image generation runs $0.04 per image on Flux");
+        assert_eq!(graph.leaves["ringo-price"].text, "A voice call costs about $0.84 per minute on Ringo");
+        assert_eq!(graph.leaves["pingly-price"].text, "Pingly reminders cost ~$0.02 per reminder");
+        // The pinned tier carries the whole flow, so the rule can be
+        // followed from the block alone; and the harvester's own pinned
+        // rules show it whole too, to supersede by id rather than re-mint.
+        let pinned = projection::render_rules(&graph).unwrap();
+        for step in ["Step 1 — Assistant asks", "Step 2 — User names the plants", "Step 3 — User says yes", "Step 4 — User confirms"] {
+            assert!(pinned.contains(step), "{step} rides pinned: {pinned}");
+        }
+        assert!(pinned.contains("- [match-energy] Match Mara's energy"), "{pinned}");
+        assert!(render_pinned_rules(&graph).contains("Step 4 — User confirms"));
+        assert!(graph.episodes.is_empty(), "nothing here happened; the import is not an event");
     }
 
     #[test]
