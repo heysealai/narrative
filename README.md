@@ -68,25 +68,15 @@ too — whatever evaluative families (trust, regret, fear…) a distillant's lin
 carries are mirrored into its routing automatically; models write honest
 lines, the runtime compiles them.
 
-Saved documents enter separately through `HarvestInput.documents`, never
-through the Rule-only instruction-resolution contract. Their facts, dated
-experiences and independent explicit instructions can populate all memory
-kinds. A retired document is read once, so the import contract asks for
-everything memory can hold: every voice, tone or manner line is a rule of
-its own (a document about the assistant's voice is a list of rules, not
-persona prose); a workflow with steps is one rule carrying its trigger and
-every step verbatim, since a rule that names a flow without its body cannot
-be followed; a default ("when X, use Y") is a rule; numbers, units, prices,
-dates and qualifiers ride verbatim. The engine frames each document for the harvester with when it was
-written (`Document.written_at`), so a two-year-old note is read as of then:
-memory newer than the document outranks it, the document's own dates are
-the event time of what it says, and the import itself is not an event. The
-document and the record of its import stay the host's; a host that wants
-the import on the user's record pushes an episode of its own into the
-batch, and the ordinary rule does the rest: every accepted op cites the
+The harvester reads finished turns and the instructions the assistant
+acknowledged in them, nothing else. There is no input for saved
+documents or notes: a document is somebody's summary, undated as far as
+belief is concerned, and every op lands as now-belief, so a summary
+poured in would outrank the dated evidence it summarised. What a host
+wants in memory arrives through a turn. Every accepted op cites the
 batch's episodes on the leaf it landed on — a duplicate moves no belief,
-wording or clock, but still cites its source, so a document that only
-restated known memory is forgotten with what it restated. A retract
+wording or clock, but still cites its source, so an episode whose only
+citation was a restated fact is forgotten with that fact. A retract
 withdraws the rule and nothing else: the rule leaves every prompt but
 stays on record under its id (`open rules` lists it as withdrawn), the
 user giving it again reinstates it, and only a forget erases it — and

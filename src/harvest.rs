@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 use crate::belief;
 use crate::llm::{ChatRequest, Llm};
-use crate::model::{age_str, Belief, Distillant, Graph, Leaf, LeafKind, Nudge, Salience, Species, Supersession, Tree, PROFILE_APEX};
+use crate::model::{Belief, Distillant, Graph, Leaf, LeafKind, Nudge, Salience, Species, Supersession, Tree, PROFILE_APEX};
 use crate::projection;
 use crate::routing;
 
@@ -803,51 +803,27 @@ pub struct Instruction {
     pub paraphrase: String,
 }
 
-/// A saved document the host holds: what to call it, the text the
-/// harvester reads, and when it was written if the host knows. The engine
-/// frames it for the harvester and accepts what the harvester cuts from
-/// it; the document itself, and the record of its import, stay the
-/// host's. A host that wants the import on the user's record pushes an
-/// [`Op::Episode`] of its own into the batch.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Document {
-    pub name: String,
-    pub text: String,
-    /// When the document was written, unix seconds: the age the harvester
-    /// reads its words at, so a two-year-old note does not read as today's
-    /// words. None when the host does not know.
-    pub written_at: Option<u64>,
-}
-
-/// What the harvester reads of a finished turn and pending source material.
-/// `field_manual` is the host-rendered upsert compare point. `instructions`
-/// receive Rule-only verdicts; `documents` can contribute every memory kind.
-/// Empty inputs omit their sections.
+/// What the harvester reads of a finished turn. `field_manual` is the
+/// host-rendered upsert compare point. `instructions` receive Rule-only
+/// verdicts. Empty inputs omit their sections.
 #[derive(Clone, Debug)]
 pub struct HarvestInput<'a> {
     pub user_text: &'a str,
     pub assistant_text: &'a str,
     pub field_manual: &'a str,
     pub instructions: &'a [Instruction],
-    pub documents: &'a [Document],
 }
 
 impl<'a> HarvestInput<'a> {
     /// The bare turn: no field manual, nothing awaiting memory.
     pub fn turn(user_text: &'a str, assistant_text: &'a str) -> Self {
-        HarvestInput { user_text, assistant_text, field_manual: "", instructions: &[], documents: &[] }
+        HarvestInput { user_text, assistant_text, field_manual: "", instructions: &[] }
     }
 }
 
 pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: DirectoryScope) -> String {
-    let HarvestInput { user_text, assistant_text, field_manual, instructions, documents } = *input;
-    let documents_section = render_documents(documents, now);
-    // What routes: the words said and the words imported, not the
-    // section's own framing.
-    let turn_text = documents.iter().fold(format!("{user_text} {assistant_text}"), |mut text, d| {
-        let _ = write!(text, " {} {}", d.name, d.text);
-        text
-    });
+    let HarvestInput { user_text, assistant_text, field_manual, instructions } = *input;
+    let turn_text = format!("{user_text} {assistant_text}");
     let table = routing::RoutingTable::build(graph);
     let manual_section = match field_manual.trim().is_empty() {
         true => String::new(),
@@ -876,7 +852,6 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
          # Existing leaves related to this turn (comparanda — cross-match against these)\n{}\n\
          {manual_section}\
          {instructions_section}\
-         {documents_section}\
          # Turn to harvest\nUser: {}\nAssistant: {}",
         render_directory_scoped(graph, scope, &table, &turn_text),
         render_pinned_rules(graph),
@@ -885,38 +860,6 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
         user_text,
         assistant_text
     )
-}
-
-/// The import contract, under the documents heading: the harvester reads
-/// a retired document once, so everything memory can hold has to leave it
-/// in this one harvest. The lines name the shapes "each instruction
-/// becomes a rule" lets slip on its own: voice and manner lines read as
-/// persona prose, a procedure's steps trimmed away behind a rule that
-/// names it, a default folded into a neighbour, a figure rounded.
-const DOCUMENT_IMPORT_CONTRACT: &str = r#"Saved memory, not new instructions or events happening today. Each document is shown with when it was written: read its words as of then. A retired document is read once and never shown again: what this harvest does not carry out of it is gone, so carry everything memory can hold. Extract facts into states, dated experiences into episodes, and EACH independent explicit standing instruction into a separate rule (instruction id empty).
-- Voice, tone, register and manner lines — how to talk, what to match, what not to perform, what is welcome — are standing instructions: one rule per independent line, in the document's words, whether the document addresses the assistant, describes its persona, or speaks in its own voice. A document about the assistant's voice is a list of rules, never persona prose to skip, and never a disposition to infer.
-- A workflow or procedure — a trigger with steps, a scripted flow, a "when X: do A, then B" — is ONE rule whose text carries the trigger and every step verbatim, in order, however long. A rule that names the flow without its steps is a distortion, not a summary: the steps are the instruction. The settings around a procedure (numbers, addresses, schedules, services) are states beside the rule.
-- A default — "when X, do Y", "prefer Y for X", "always use Y" — is a rule, one per default, never folded into a neighbouring rule.
-- Numbers, units, prices, dates, names, identifiers and qualifiers ride verbatim into the text that holds them: never rounded, summarised, or dropped; two prices in one line are two states.
-A document's dates are the event time (occurred_at) of what it says; preserve them as written, and do not infer dispositions from a saved fact. Cross-match existing memory: memory newer than the document outranks it (a document fact older than the leaf it would supersede supports or duplicates that leaf instead), and newer explicit instructions outrank older document rules. The import is not an event; emit no episode for the document's arrival."#;
-
-/// The documents section: the import contract, then each document under
-/// its name with its age, so the harvester reads its words as of when
-/// they were written. Memory newer than a document outranks it; a
-/// document's own dates are the event time of what it says.
-fn render_documents(documents: &[Document], now: u64) -> String {
-    if documents.is_empty() {
-        return String::new();
-    }
-    let mut out = format!("# Documents to import\n{DOCUMENT_IMPORT_CONTRACT}\n");
-    for document in documents {
-        let written = match document.written_at {
-            Some(at) => format!("written {}", age_str(now, at)),
-            None => "written at an unknown time".to_string(),
-        };
-        let _ = writeln!(out, "## {} ({written})\n{}\n", document.name, document.text);
-    }
-    out
 }
 
 /// The keyless prompt: system contract, the exact output schema, and the
@@ -1932,176 +1875,22 @@ mod tests {
         assert!(g.leaves["no-emoji"].kind.history().is_empty(), "same words: nothing superseded");
     }
 
-    #[test]
-    fn document_import_preserves_facts_dates_and_each_independent_rule() {
-        let documents = vec![Document {
-            name: "USER.md".into(),
-            text: "Lives in Lisbon. Opened North studio on 2024-01-02. Never use exclamation marks. Keep replies short.".into(),
-            written_at: Some(86_400 * 100),
-        }];
-        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
-        let mut graph = Graph::seed();
-        let now = 86_400 * 500;
-        let prompt = render_harvest_prompt(&graph, &input, now);
-        assert!(prompt.contains("# Documents to import"));
-        assert!(!prompt.contains("# Instructions to resolve"));
-        assert!(prompt.contains("EACH independent explicit standing instruction"));
-        assert!(prompt.contains("## USER.md (written 1.1y ago)"), "the harvester reads the words as of when they were written: {prompt}");
-        assert!(prompt.contains("memory newer than the document outranks it"));
-        // The contract rides once, under the heading, before the first document.
-        let section = prompt.split("# Documents to import\n").nth(1).unwrap();
-        let contract = section.split("## USER.md").next().unwrap();
-        assert!(contract.contains("A retired document is read once and never shown again"), "{contract}");
-        assert!(contract.contains("Voice, tone, register and manner lines"), "{contract}");
-        assert!(contract.contains("are standing instructions: one rule per independent line"), "{contract}");
-        assert!(contract.contains("never persona prose to skip, and never a disposition to infer"), "{contract}");
-        assert!(contract.contains("is ONE rule whose text carries the trigger and every step verbatim, in order, however long"), "{contract}");
-        assert!(contract.contains("A rule that names the flow without its steps is a distortion, not a summary"), "{contract}");
-        assert!(contract.contains("is a rule, one per default, never folded into a neighbouring rule"), "{contract}");
-        assert!(contract.contains("Numbers, units, prices, dates, names, identifiers and qualifiers ride verbatim"), "{contract}");
-        assert!(contract.contains("two prices in one line are two states"), "{contract}");
-        // The system contract and the schema say the same of a procedure, for
-        // a flow dictated in conversation as much as one imported.
-        let system = prompt.split("# Output schema").next().unwrap();
-        assert!(system.contains("A procedure's steps are the instruction, not detail to trim"), "{system}");
-        assert!(prompt.contains("a procedure keeps its trigger and every step, in order"), "the schema's rule text says so too");
-        let ops = parse_ops(&json!({
-            "states": [{"id": "city", "distillants": ["reg.home"], "text": "Lives in Lisbon", "relation": "novel", "target": "", "importance": 0.7, "aliases": ["Lisbon"]}],
-            "episodes": [{"text": "Opened North studio on 2024-01-02", "tags": [], "occurred_at": 1704153600}],
-            "rules": [
-                {"id": "punctuation", "text": "Never use exclamation marks", "relation": "novel", "target": ""},
-                {"id": "length", "text": "Keep replies short", "relation": "novel", "target": ""}
-            ]
-        }).to_string()).unwrap();
-        let applied = apply_ops(&mut graph, ops, 1_000);
-        assert_eq!(graph.leaves["city"].text, "Lives in Lisbon");
-        assert_eq!(graph.rules().len(), 2);
-        assert_eq!(applied.rules.len(), 2);
-        assert_eq!(graph.episodes.len(), 1, "the dated experience is the only episode: the import itself is not an event");
-        assert_eq!(graph.episodes[0].occurred_at, Some(1704153600));
-        assert!(resolve(&[], &applied).is_empty(), "imports have no Rule-only verdict");
-
-        let undated = vec![Document { name: "notes.txt".into(), text: "A quiet day.".into(), written_at: None }];
-        let prompt = render_harvest_prompt(&graph, &HarvestInput { documents: &undated, ..HarvestInput::turn("", "") }, 1_000);
-        assert!(prompt.contains("## notes.txt (written at an unknown time)"), "{prompt}");
-    }
-
-    /// A voice document, a workflows document and a preferences document
-    /// of the shapes a host retires: a manner section of one-line
-    /// instructions, a scripted flow with numbered steps beside a one-line
-    /// rule that points at it, a research default, priced settings, a
-    /// preference with a qualifier.
-    fn retired_documents() -> Vec<Document> {
-        vec![
-            Document {
-                name: "VOICE.md".into(),
-                text: "# Voice\n## Vibe\n- Keep it short by default.\n- Match Mara's energy — she is casual, fast, uses shorthand. Don't over-formalize.\n- Humor is welcome. Warmth over polish.\n- Don't perform being an assistant. Just be present.\n".into(),
-                written_at: Some(86_400 * 300),
-            },
-            Document {
-                name: "WORKFLOWS.md".into(),
-                text: "# Saved Workflows\n## Research\n- Trigger: the user asks to research a topic.\n- Steps: check the reading catalog first before any web search.\n- Defaults: prefer newsletter sources as the primary research tool.\n\n## Plant Tracker — Demo Conversation Flow\n- Trigger: the user says \"make a plant tracker\".\n- This is a SCRIPTED DEMO FLOW. Follow it exactly, in order:\n  Step 1 — Assistant asks: \"which plants, and how often do you water them?\"\n  Step 2 — User names the plants; assistant asks whether to send a reminder by email.\n  Step 3 — User says yes; assistant proposes a schedule and asks to confirm.\n  Step 4 — User confirms; assistant creates the standing order and renders the plant journal card in the same reply.\n- Timezone for reminders: Europe/Lisbon (7am WET)\n- Reminder service: Pingly (~$0.02 per reminder)\n".into(),
-                written_at: Some(86_400 * 400),
-            },
-            Document {
-                name: "USER.md".into(),
-                text: "# Preferences\n- Wants short answers — three sentences max, even for reflective questions.\n- Prices seen: image generation runs $0.04 per image on Flux; a voice call costs about $0.84 per minute on Ringo.\n".into(),
-                written_at: Some(86_400 * 450),
-            },
-        ]
-    }
-
-    #[test]
-    fn a_retired_document_loses_nothing_memory_can_hold() {
-        let documents = retired_documents();
-        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
-        let mut graph = Graph::seed();
-        let prompt = render_harvest_prompt(&graph, &input, 86_400 * 500);
-        assert!(prompt.contains("## VOICE.md (written 6mo ago)"), "{prompt}");
-        assert!(prompt.contains("Step 4 — User confirms"), "the flow rides whole into the prompt: {prompt}");
-        // What the contract asks for, in the ops it asks for: every manner
-        // line its own rule, the flow one rule with every step, the default
-        // its own rule, every price verbatim, the qualifier kept.
-        let flow = "When the user says \"make a plant tracker\", follow this scripted demo flow exactly, in order:\nStep 1 — Assistant asks: \"which plants, and how often do you water them?\"\nStep 2 — User names the plants; assistant asks whether to send a reminder by email.\nStep 3 — User says yes; assistant proposes a schedule and asks to confirm.\nStep 4 — User confirms; assistant creates the standing order and renders the plant journal card in the same reply.";
-        let ops = parse_ops(&json!({
-            "rules": [
-                {"id": "short-by-default", "text": "Keep it short by default", "relation": "novel", "target": ""},
-                {"id": "match-energy", "text": "Match Mara's energy — she is casual, fast, uses shorthand. Don't over-formalize", "relation": "novel", "target": ""},
-                {"id": "humor-welcome", "text": "Humor is welcome. Warmth over polish", "relation": "novel", "target": ""},
-                {"id": "be-present", "text": "Don't perform being an assistant. Just be present", "relation": "novel", "target": ""},
-                {"id": "research-catalog-first", "text": "When asked to research a topic, check the reading catalog first before any web search", "relation": "novel", "target": ""},
-                {"id": "research-newsletters", "text": "Prefer newsletter sources as the primary research tool", "relation": "novel", "target": ""},
-                {"id": "plant-tracker-demo-flow", "text": flow, "relation": "novel", "target": ""},
-                {"id": "three-sentences", "text": "Wants short answers — three sentences max, even for reflective questions", "relation": "novel", "target": ""}
-            ],
-            "states": [
-                {"id": "plant-reminder-timezone", "distillants": ["life"], "text": "Plant reminders go out in Europe/Lisbon time, at 7am WET", "relation": "novel", "target": "", "importance": 0.6, "aliases": []},
-                {"id": "pingly-price", "distillants": ["money"], "text": "Pingly reminders cost ~$0.02 per reminder", "relation": "novel", "target": "", "importance": 0.6, "aliases": ["Pingly"]},
-                {"id": "flux-price", "distillants": ["money"], "text": "Image generation runs $0.04 per image on Flux", "relation": "novel", "target": "", "importance": 0.6, "aliases": ["Flux"]},
-                {"id": "ringo-price", "distillants": ["money"], "text": "A voice call costs about $0.84 per minute on Ringo", "relation": "novel", "target": "", "importance": 0.6, "aliases": ["Ringo"]}
-            ]
-        }).to_string()).unwrap();
-        let applied = apply_ops(&mut graph, ops, 86_400 * 500);
-        assert_eq!(applied.rules.len(), 8, "{:?}", applied.traces);
-        assert_eq!(graph.rules().len(), 8, "one rule per manner line, per default, per flow, per preference");
-        assert_eq!(graph.leaves["plant-tracker-demo-flow"].text, flow, "the rule holds the flow's every step, unchanged");
-        assert_eq!(graph.leaves["three-sentences"].text, "Wants short answers — three sentences max, even for reflective questions");
-        assert_eq!(graph.leaves["flux-price"].text, "Image generation runs $0.04 per image on Flux");
-        assert_eq!(graph.leaves["ringo-price"].text, "A voice call costs about $0.84 per minute on Ringo");
-        assert_eq!(graph.leaves["pingly-price"].text, "Pingly reminders cost ~$0.02 per reminder");
-        // The pinned tier carries the whole flow, so the rule can be
-        // followed from the block alone; and the harvester's own pinned
-        // rules show it whole too, to supersede by id rather than re-mint.
-        let pinned = projection::render_rules(&graph).unwrap();
-        for step in ["Step 1 — Assistant asks", "Step 2 — User names the plants", "Step 3 — User says yes", "Step 4 — User confirms"] {
-            assert!(pinned.contains(step), "{step} rides pinned: {pinned}");
-        }
-        assert!(pinned.contains("- [match-energy] Match Mara's energy"), "{pinned}");
-        assert!(render_pinned_rules(&graph).contains("Step 4 — User confirms"));
-        assert!(graph.episodes.is_empty(), "nothing here happened; the import is not an event");
-    }
-
-    #[test]
-    fn a_document_routes_on_its_words_not_the_section_framing() {
-        let mut g = Graph::seed();
-        let ops = vec![Op::Distillant {
-            id: "machinery".into(),
-            tree: Tree::Registry,
-            label: "machinery".into(),
-            line: "how memory is put together".into(),
-            routing: vec!["episodes".into(), "dispositions".into(), "standing instruction".into()],
-            parents: vec![],
-        }];
-        apply_ops(&mut g, ops, 1_000);
-        let documents = vec![Document { name: "USER.md".into(), text: "Lives in Lisbon.".into(), written_at: None }];
-        let input = HarvestInput { documents: &documents, ..HarvestInput::turn("", "") };
-        let prompt = build_user_message(&g, &input, 1_000, DirectoryScope::Selective);
-        assert!(prompt.contains("# Documents to import"), "{prompt}");
-        let directory = prompt.split("# Standing rules").next().unwrap();
-        assert!(
-            !directory.contains("how memory is put together"),
-            "the section's own framing must not open a branch: {directory}"
-        );
-    }
-
     fn strength_of(g: &Graph, id: &str) -> f32 {
         belief::strength(g.leaves[id].kind.belief().expect("weighed leaf"))
     }
 
-    /// The host's own record of an import, pushed into the batch as an
-    /// ordinary episode: what the batch's leaves then cite.
-    fn host_import_episode(name: &str) -> Op {
-        Op::Episode { text: format!("Imported notes from {name}"), tags: vec![], occurred_at: None }
+    fn batch_episode(text: &str) -> Op {
+        Op::Episode { text: text.into(), tags: vec![], occurred_at: None }
     }
 
     #[test]
-    fn a_duplicate_only_import_is_forgotten_with_the_fact_it_restated() {
+    fn a_duplicate_only_batch_is_forgotten_with_the_fact_it_restated() {
         let mut g = Graph::seed();
         apply_ops(&mut g, vec![state_op("city", "Lives in Lisbon", Relation::Novel, "")], 1_000);
         let before = g.leaves["city"].clone();
         // Two ops in one batch name the same fact: the host's episode is cited once.
         let ops = vec![
-            host_import_episode("USER.md"),
+            batch_episode("we went over the basics"),
             state_op("city-again", "Lives in Lisbon", Relation::Duplicate, "city"),
             state_op("city-thrice", "Lives in Lisbon", Relation::Duplicate, "city"),
         ];
@@ -2122,13 +1911,13 @@ mod tests {
     }
 
     #[test]
-    fn a_duplicate_only_import_cites_the_rule_it_restated() {
+    fn a_duplicate_only_batch_cites_the_rule_it_restated() {
         for relation in [RuleRelation::Duplicate, RuleRelation::Novel] {
             let mut g = Graph::seed();
             apply_ops(&mut g, vec![rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", "i-1")], 1_000);
             let before = g.leaves["five-lines"].clone();
             let target = if relation == RuleRelation::Duplicate { "five-lines" } else { "" };
-            let ops = vec![host_import_episode("USER.md"), rule_op("five-lines", "keep replies to five lines", relation, target, "")];
+            let ops = vec![batch_episode("we went over the basics"), rule_op("five-lines", "keep replies to five lines", relation, target, "")];
             let applied = apply_ops(&mut g, ops, 2_000);
             assert!(matches!(applied.rules[0].effect, RuleEffect::Duplicate { .. }), "{relation:?}: {:?}", applied.rules);
             assert_eq!(g.episodes.len(), 1);
@@ -2142,7 +1931,7 @@ mod tests {
 
             apply_ops(&mut g, vec![rule_op("five-lines", "", RuleRelation::Retract, "five-lines", "")], 3_000);
             assert!(g.leaves["five-lines"].is_withdrawn_rule());
-            assert_eq!(g.episodes.len(), 1, "{relation:?}: a retract withdraws the rule, not the record of the import");
+            assert_eq!(g.episodes.len(), 1, "{relation:?}: a retract withdraws the rule, not the episode it cited");
         }
     }
 
@@ -2158,7 +1947,7 @@ mod tests {
             1_000,
         );
         let ops = vec![
-            host_import_episode("USER.md"),
+            batch_episode("we went over the basics"),
             state_op("city-again", "Lives in Lisbon", Relation::Duplicate, "city"),
             rule_op("five-lines", "keep replies to five lines", RuleRelation::Duplicate, "five-lines", ""),
         ];
@@ -2614,7 +2403,6 @@ mod tests {
                 assistant_text: "",
                 field_manual: "- fetch against resy.com: plain fetch refused; use the paid search service",
                 instructions: &[],
-                documents: &[],
             },
             1_000,
             DirectoryScope::Full,
