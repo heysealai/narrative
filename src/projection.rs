@@ -526,6 +526,7 @@ mod tests {
                 line_changed_at: 0,
                 forgotten_at: 0,
                 tally: None,
+                rhythm: None,
             },
         );
         for i in 0..8 {
@@ -618,6 +619,7 @@ mod tests {
                     line_changed_at: 0,
                     forgotten_at: 0,
                     tally: None,
+                    rhythm: None,
                 },
             );
             let l = Leaf::state(
@@ -706,6 +708,7 @@ mod tests {
                     line_changed_at: 0,
                     forgotten_at: 0,
                     tally: None,
+                    rhythm: None,
                 },
             );
             for i in 0..5 {

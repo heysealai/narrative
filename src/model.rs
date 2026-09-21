@@ -71,6 +71,8 @@ pub struct Episode {
     pub actions: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub folded_actions: BTreeMap<String, Vec<u64>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folded_at: Vec<u64>,
 }
 
 impl Episode {
@@ -84,6 +86,10 @@ impl Episode {
 
     pub fn is_digest(&self) -> bool {
         self.id.starts_with("ep-digest-")
+    }
+
+    pub fn user_acted(&self) -> bool {
+        !self.is_digest() && self.actions.as_ref().is_some_and(|a| !a.is_empty())
     }
 }
 
@@ -409,6 +415,23 @@ pub struct Distillant {
     pub forgotten_at: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tally: Option<Tally>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rhythm: Option<Rhythm>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Rhythm {
+    pub timezone: String,
+    pub n: u32,
+    pub first: u64,
+    pub last: u64,
+    pub hours: Vec<u32>,
+    pub days: Vec<u32>,
+    pub window_start: u8,
+    pub window_len: u8,
+    pub active_days_30d: u32,
+    pub sessions_30d: u32,
+    pub computed_at: u64,
 }
 
 impl Distillant {
@@ -452,6 +475,7 @@ impl Distillant {
             line_changed_at: 0,
             forgotten_at: 0,
             tally: None,
+            rhythm: None,
         }
     }
 
@@ -474,6 +498,8 @@ pub struct Graph {
     pub leaves: BTreeMap<Id, Leaf>,
     #[serde(default, skip_serializing_if = "PatternState::is_empty")]
     pub patterns: PatternState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
 }
 
 impl PatternState {
@@ -512,6 +538,8 @@ pub const MECH_DIGEST_PREFIX: &str = "[digest of ";
 pub const PROFILE_APEX: &str = "character";
 pub const HABITS: &str = "habits";
 pub const TASTE: &str = "taste";
+pub const RHYTHMS: &str = "rhythms";
+pub const STAMP_SLACK_SECS: u64 = 86_400;
 
 struct Crown {
     tree: Tree,
@@ -546,6 +574,7 @@ const CROWN: &[Crown] = &[
      &["home", "health", "gym", "trip", "travel", "hobby", "weekend"]),
     crown(Tree::Registry, HABITS, "Habits", &[], &["habit", "habits", "routine"]),
     crown(Tree::Registry, TASTE, "Taste", &[], &["taste", "style", "aesthetic", "design", "look and feel"]),
+    crown(Tree::Registry, RHYTHMS, "Rhythms", &[], &["rhythm", "rhythms", "usually", "mornings", "evenings", "weekends", "weekdays"]),
     crown(Tree::Profile, PROFILE_APEX, "Character", &[], &[]),
     crown(Tree::Profile, "communication", "Communication style", &[PROFILE_APEX], &[]),
     crown(Tree::Profile, "money-style", "Money style", &[PROFILE_APEX], &[]),
@@ -596,6 +625,33 @@ impl Graph {
             ats.sort_unstable();
         }
         ledger
+    }
+
+    pub fn drop_future_stamps(&mut self) -> u32 {
+        let mut dropped = 0;
+        for e in &mut self.episodes {
+            if e.occurred_at.is_some_and(|o| o > e.at + STAMP_SLACK_SECS) {
+                e.occurred_at = None;
+                dropped += 1;
+            }
+        }
+        for l in self.leaves.values_mut() {
+            if l.occurred_at.is_some_and(|o| o > l.updated_at + STAMP_SLACK_SECS) {
+                l.occurred_at = None;
+                dropped += 1;
+            }
+        }
+        dropped
+    }
+
+    pub fn activity(&self) -> Vec<u64> {
+        let mut at: Vec<u64> = self
+            .episodes
+            .iter()
+            .flat_map(|e| e.folded_at.iter().copied().chain(e.user_acted().then_some(e.at)))
+            .collect();
+        at.sort_unstable();
+        at
     }
 
     pub fn habit_of(&self, action: &str) -> Option<&Distillant> {
@@ -676,7 +732,16 @@ impl Graph {
             id = format!("ep-{n}");
         }
         let actions = actions.map(|a| a.iter().map(|t| slugify(t)).filter(|t| !t.is_empty()).collect());
-        self.episodes.push(Episode { id: id.clone(), at, occurred_at, text, tags, actions, folded_actions: BTreeMap::new() });
+        self.episodes.push(Episode {
+            id: id.clone(),
+            at,
+            occurred_at,
+            text,
+            tags,
+            actions,
+            folded_actions: BTreeMap::new(),
+            folded_at: Vec::new(),
+        });
         while self.episodes.len() > STREAM_HARD_CAP {
             self.fold_oldest(COMPRESS_BATCH, None);
         }
@@ -694,7 +759,12 @@ impl Graph {
         let batch: Vec<Episode> = self.episodes.drain(0..take).collect();
         let mut tags: Vec<String> = Vec::new();
         let mut folded_actions: BTreeMap<String, Vec<u64>> = BTreeMap::new();
+        let mut folded_at: Vec<u64> = Vec::new();
         for e in &batch {
+            folded_at.extend(e.folded_at.iter().copied());
+            if e.user_acted() {
+                folded_at.push(e.at);
+            }
             for t in &e.tags {
                 if !tags.contains(t) {
                     tags.push(t.clone());
@@ -710,6 +780,7 @@ impl Graph {
         for ats in folded_actions.values_mut() {
             ats.sort_unstable();
         }
+        folded_at.sort_unstable();
         let text = text.unwrap_or_else(|| {
             let mut text = format!("{MECH_DIGEST_PREFIX}{} earlier episodes] ", batch.len());
             let mut omitted = 0usize;
@@ -742,6 +813,7 @@ impl Graph {
             tags,
             actions: Some(Vec::new()),
             folded_actions,
+            folded_at,
         };
         self.episodes.insert(0, digest);
         let dropped: Vec<&str> = batch.iter().map(|e| e.id.as_str()).collect();
@@ -899,6 +971,7 @@ impl Graph {
         let added = self.ensure_standing_crowns();
         out.apex_created = added.iter().any(|id| id == PROFILE_APEX);
         out.crowns_added = added.into_iter().filter(|id| id != PROFILE_APEX).collect();
+        out.future_stamps_dropped = self.drop_future_stamps();
         let distillant_ids: Vec<Id> = self.distillants.keys().cloned().collect();
         for id in distillant_ids {
             let m = &self.distillants[&id];
@@ -960,11 +1033,16 @@ pub struct Normalized {
     /// Whether the apex itself was missing and had to be created.
     pub apex_created: bool,
     pub crowns_added: Vec<Id>,
+    pub future_stamps_dropped: u32,
 }
 
 impl Normalized {
     pub fn is_empty(&self) -> bool {
-        self.antichained.is_empty() && self.homed_under_apex.is_empty() && !self.apex_created && self.crowns_added.is_empty()
+        self.antichained.is_empty()
+            && self.homed_under_apex.is_empty()
+            && !self.apex_created
+            && self.crowns_added.is_empty()
+            && self.future_stamps_dropped == 0
     }
 }
 
@@ -1041,7 +1119,7 @@ mod tests {
         assert!(g.distillants.contains_key("communication"));
         let mut crowns: Vec<&str> = g.roots(Tree::Registry).iter().map(|c| c.id.as_str()).collect();
         crowns.sort();
-        assert_eq!(crowns, vec![HABITS, "life", "money", "people", TASTE, "work"]);
+        assert_eq!(crowns, vec![HABITS, "life", "money", "people", RHYTHMS, TASTE, "work"]);
         let profile_roots = g.roots(Tree::Profile);
         assert_eq!(profile_roots.len(), 1, "the apex is the profile's one root");
         assert_eq!(profile_roots[0].id, PROFILE_APEX);
@@ -1147,6 +1225,7 @@ mod tests {
                     line_changed_at: 0,
                     forgotten_at: 0,
                     tally: None,
+                    rhythm: None,
                 },
             );
         }

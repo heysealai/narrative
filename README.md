@@ -42,7 +42,7 @@ Three stores and a rules list, one routing table, two motions:
 | Store | Topology | Lifecycle |
 |---|---|---|
 | **Stream** | time-ordered episodes, each tagged with the actions the user took | immutable, accumulate, digest (the digest keeps the action marks), fade |
-| **Registry** | tree of state facts under six crowns — people, money, work, life, habits, taste | current value + supersession history (*states switch*); `habits/*` is written by the pattern pass from the counts, `taste/*` by the harvest from standards the user states |
+| **Registry** | tree of state facts under seven crowns — people, money, work, life, habits, taste, rhythms | current value + supersession history (*states switch*); `habits/*` is written by the pattern pass from the counts, `taste/*` by the harvest from standards the user states, `rhythms` by the pass from the clock |
 | **Profile** | one apex (the character estimate) over a trait-shaped tree of dispositions | scored axes with nudge trajectories (*dispositions drift*); the apex line is distilled from the axis lines |
 | **Rules** | flat list under no tree | the user's standing instructions, verbatim; binding on first occurrence, changed — reworded, withdrawn, reinstated — only by a later instruction (*rules bind*) |
 
@@ -127,7 +127,10 @@ routing in the plain words a request for the behaviour would carry, and the
 evidence leaves adopted beside their projects; *project* and *noise* are
 remembered with their count so the cluster is not re-asked until it grows. A
 habit idle for several times its usual gap fades to past tense, then folds
-into one stream episode. The stream has
+into one stream episode. The same pass keeps the `rhythms` crown: when the
+person is around, counted in their zone from the times they acted — the
+densest hour window, the quiet weekdays, the active days of the last thirty —
+with no model in the loop. The stream has
 its own species: past a soft cap, the oldest episodes get distilled into a
 digest that cuts at a natural period boundary, while the texts are still
 alive to read.
@@ -197,8 +200,9 @@ narrative apply ops.json             # apply harvester ops (sectioned schema)
 narrative digest-prompt              # input for a due stream digest pass
 narrative digest "<text>" [--take n] # apply digest text (n = episodes covered)
 narrative pattern-prompt             # the due pattern step: tag untagged episodes, or rule on a repeated action
-narrative pattern <json|@file|->     # apply the response (a fold takes none)
+narrative pattern <json|@file|->     # apply the response (a fold or the rhythms recount takes none)
 narrative habits                     # the standing habits with their counts
+narrative timezone Asia/Tokyo        # the user's zone: rhythms count in it, the harvester's dates read in it
 narrative redistill-prompt <distillant>      # that distillant's full contract
 narrative redistill <distillant> @out.json   # apply the redistill response
 narrative open <distillant|rules> | rules | profile | map | stream | stats | forget <id>
@@ -225,7 +229,9 @@ minted: [docs/harvest-scope-replay.md](docs/harvest-scope-replay.md).
 | | |
 |---|---|
 | `model.rs` | the three stores and the rules, leaves by kind, distillants, seed crown, the action ledger |
-| `pattern.rs` | the pattern pass: action tagging, mechanical clustering, one ruling per repeated action, fade and fold of habits |
+| `pattern.rs` | the pattern pass: action tagging, mechanical clustering, one ruling per repeated action, fade and fold of habits, the rhythms recount |
+| `rhythm.rs` | presence counted in the user's zone: hours and weekdays active, the densest window, the line |
+| `clock.rs` | zone-aware helpers: the now stamp a prompt shows, the dates the harvester answers with |
 | `belief.rs` | belief & salience arithmetic, EMA axis nudges, supersession |
 | `routing.rs` | routing table + lexical matching (read hot path) |
 | `projection.rs` | per-turn recall, pinned rules/profile, skeleton and open rendering |
@@ -324,7 +330,10 @@ Second pass — the Crusoe-run priorities are in:
 
 - **Event-time vs write-time**: episodes and states carry harvester-settable
   `occurred_at`; rendered ages ("noted 2mo ago", "changed 3mo ago") prefer
-  story time, while belief/salience arithmetic stays on write time.
+  story time, while belief/salience arithmetic stays on write time. The
+  harvester answers with a date string counted back from the now stamp on
+  the turn, resolved in the user's zone; a stamp later than its write is
+  dropped.
 - **Structural ops**: `moves`, `reparents`, `merge_leaves`,
   `merge_distillants` joined the op vocabulary (cycle-guarded; merges
   combine evidence, belief counts, and routing vocabulary). `redistill` can

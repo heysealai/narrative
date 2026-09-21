@@ -11,7 +11,8 @@ use serde_json::{json, Value};
 
 use crate::harvest::{self, Op};
 use crate::llm::{ChatRequest, Llm};
-use crate::model::{age_str, slugify, Distillant, Graph, Id, Ruling, Tally, Tree, Verdict, HABITS};
+use crate::model::{age_str, slugify, Distillant, Graph, Id, Ruling, Tally, Tree, Verdict, HABITS, RHYTHMS};
+use crate::rhythm;
 
 const DAY: u64 = 86_400;
 
@@ -56,6 +57,7 @@ pub enum Phase {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PatternStep {
+    Rhythm,
     Tag(Vec<Id>),
     Rule { action: String, phase: Phase },
     Fold(Id),
@@ -64,6 +66,7 @@ pub enum PatternStep {
 impl PatternStep {
     pub fn describe(&self) -> String {
         match self {
+            PatternStep::Rhythm => "pattern pass due: recount when the user is around and rewrite the rhythms line — mechanical".to_string(),
             PatternStep::Tag(ids) => format!("pattern pass due: tag {} untagged episodes with their actions", ids.len()),
             PatternStep::Rule { action, phase } => {
                 let verb = match phase {
@@ -78,7 +81,7 @@ impl PatternStep {
     }
 
     pub fn needs_model(&self) -> bool {
-        !matches!(self, PatternStep::Fold(_))
+        !matches!(self, PatternStep::Fold(_) | PatternStep::Rhythm)
     }
 }
 
@@ -164,10 +167,28 @@ pub fn untagged(graph: &Graph) -> Vec<Id> {
     graph.episodes.iter().filter(|e| e.awaits_actions()).map(|e| e.id.clone()).take(TAG_BATCH).collect()
 }
 
+pub fn rhythm_due(graph: &Graph, now: u64) -> bool {
+    let Some(tz) = graph.timezone.as_deref().filter(|z| crate::clock::zone(z).is_some()) else { return false };
+    let points = graph.activity();
+    let (Some(&first), Some(&last)) = (points.first(), points.last()) else { return false };
+    if points.len() < rhythm::MIN_POINTS || last.saturating_sub(first) < rhythm::MIN_SPAN_SECS {
+        return false;
+    }
+    let Some(stored) = graph.distillants.get(RHYTHMS).and_then(|m| m.rhythm.as_ref()) else { return true };
+    let n = points.len() as u32;
+    let grew = n > stored.n;
+    let stale = now.saturating_sub(stored.computed_at) > rhythm::REFRESH_SECS;
+    let tense_flipped = rhythm::is_idle(stored, now) != rhythm::is_idle(stored, stored.computed_at);
+    stored.timezone != tz || n >= stored.n + rhythm::REFRESH_POINTS || (grew && stale) || tense_flipped
+}
+
 pub fn due(graph: &Graph, now: u64) -> Option<PatternStep> {
     let untagged = untagged(graph);
     if !untagged.is_empty() {
         return Some(PatternStep::Tag(untagged));
+    }
+    if rhythm_due(graph, now) {
+        return Some(PatternStep::Rhythm);
     }
     let ledger = graph.ledger();
     let mut habits: Vec<&Distillant> = graph.distillants.values().filter(|m| m.tally.is_some()).collect();
@@ -458,7 +479,7 @@ pub fn render_prompt(graph: &Graph, step: &PatternStep, now: u64) -> Option<Stri
     let (system, schema, body) = match step {
         PatternStep::Tag(ids) => (TAG_SYSTEM, tag_schema(), tag_body(graph, ids, now)),
         PatternStep::Rule { action, phase } => (RULE_SYSTEM, rule_schema(), rule_body(graph, action, *phase, now)),
-        PatternStep::Fold(_) => return None,
+        PatternStep::Fold(_) | PatternStep::Rhythm => return None,
     };
     Some(format!(
         "# System\n{system}\n\n# Output schema (reply with one JSON object matching it)\n{}\n\n# Input\n{body}",
@@ -468,9 +489,32 @@ pub fn render_prompt(graph: &Graph, step: &PatternStep, now: u64) -> Option<Stri
 
 pub fn apply(graph: &mut Graph, step: &PatternStep, raw: &str, now: u64) -> Result<Vec<String>> {
     match step {
+        PatternStep::Rhythm => Ok(apply_rhythm(graph, now)),
         PatternStep::Tag(ids) => apply_tags(graph, ids, raw),
         PatternStep::Rule { action, phase } => apply_ruling(graph, action, *phase, raw, now),
         PatternStep::Fold(id) => Ok(fold_habit(graph, id, now)),
+    }
+}
+
+pub fn apply_rhythm(graph: &mut Graph, now: u64) -> Vec<String> {
+    graph.ensure_standing_crowns();
+    let Some(tz) = graph.timezone.clone() else { return vec!["◷ rhythms — no timezone known; nothing counted".into()] };
+    let points = graph.activity();
+    let Some(r) = rhythm::compute(&points, &tz, now) else {
+        return vec![format!("◷ rhythms — {} activity marks in {tz}: too few to count", points.len())];
+    };
+    let line = rhythm::render_line(&r, now);
+    let n = r.n;
+    let Some(m) = graph.distillants.get_mut(RHYTHMS) else { return Vec::new() };
+    let changed = m.line != line;
+    if changed {
+        m.line = line.clone();
+        m.line_changed_at = now;
+    }
+    m.rhythm = Some(r);
+    match changed {
+        true => vec![format!("◷ rhythms — {line} ({n} activity marks, {tz})")],
+        false => vec![format!("◷ rhythms — unchanged ({n} activity marks, {tz})")],
     }
 }
 
@@ -677,6 +721,10 @@ pub fn step(llm: &dyn Llm, graph: &mut Graph, now: u64) -> Result<Vec<String>> {
             traces.extend(fold_habit(graph, id, now));
             return Ok(traces);
         }
+        PatternStep::Rhythm => {
+            traces.extend(apply_rhythm(graph, now));
+            return Ok(traces);
+        }
     };
     let req = ChatRequest {
         system: system.to_string(),
@@ -711,6 +759,75 @@ mod tests {
             g.leaves.insert(leaf.id.clone(), leaf);
         }
         g
+    }
+
+    fn graph_with_activity(days: u64, per_day: u64, timezone: Option<&str>) -> Graph {
+        let mut g = Graph::seed();
+        g.timezone = timezone.map(str::to_string);
+        for d in 0..days {
+            for k in 0..per_day {
+                let at = NOW - d * DAY - k * 900;
+                g.push_episode_acting(format!("event {d}-{k}"), vec!["work".into()], Some(vec!["did-thing".into()]), at, None);
+            }
+        }
+        g
+    }
+
+    #[test]
+    fn the_rhythm_step_needs_a_zone_and_enough_activity_and_then_writes_the_crown_line() {
+        assert_eq!(due(&graph_with_activity(10, 3, None), NOW), None, "no zone: nothing to count in");
+        assert_eq!(due(&graph_with_activity(10, 3, Some("Nowhere/Nothing")), NOW), None, "an unknown zone counts as none");
+        assert_eq!(due(&graph_with_activity(5, 3, Some("UTC")), NOW), None, "under MIN_POINTS");
+        let mut g = graph_with_activity(10, 3, Some("UTC"));
+        assert_eq!(due(&g, NOW), Some(PatternStep::Rhythm));
+        assert!(!PatternStep::Rhythm.needs_model());
+        assert!(render_prompt(&g, &PatternStep::Rhythm, NOW).is_none());
+        let traces = apply(&mut g, &PatternStep::Rhythm, "", NOW).unwrap();
+        assert!(traces[0].starts_with("◷ rhythms — Around "), "{traces:?}");
+        let crown = &g.distillants[RHYTHMS];
+        assert!(crown.line.starts_with("Around "), "{}", crown.line);
+        assert_eq!(crown.line_changed_at, NOW);
+        assert_eq!(crown.rhythm.as_ref().map(|r| r.n), Some(30));
+        assert_eq!(due(&g, NOW), None, "counted: nothing due until it grows or goes stale");
+        let traces = apply(&mut g, &PatternStep::Rhythm, "", NOW).unwrap();
+        assert!(traces[0].starts_with("◷ rhythms — unchanged"), "a recount that changes nothing leaves the line stamp alone: {traces:?}");
+    }
+
+    #[test]
+    fn the_rhythm_recounts_on_growth_staleness_a_zone_change_and_going_idle() {
+        let mut g = graph_with_activity(10, 3, Some("UTC"));
+        apply(&mut g, &PatternStep::Rhythm, "", NOW).unwrap();
+        assert_eq!(due(&g, NOW + rhythm::REFRESH_SECS + DAY), None, "stale but nothing new: no recount");
+        g.push_episode_acting("one more".into(), vec![], Some(vec!["did-thing".into()]), NOW + DAY, None);
+        assert_eq!(due(&g, NOW + rhythm::REFRESH_SECS + DAY), Some(PatternStep::Rhythm), "stale and grew");
+        assert_eq!(due(&g, NOW + DAY), None, "grew by one, fresh: wait");
+        for k in 0..rhythm::REFRESH_POINTS {
+            g.push_episode_acting(format!("more {k}"), vec![], Some(vec!["did-thing".into()]), NOW + DAY + k as u64, None);
+        }
+        assert_eq!(due(&g, NOW + DAY), Some(PatternStep::Rhythm), "grew by REFRESH_POINTS: recount now");
+        apply(&mut g, &PatternStep::Rhythm, "", NOW + DAY).unwrap();
+        g.timezone = Some("Asia/Tokyo".into());
+        assert_eq!(due(&g, NOW + DAY), Some(PatternStep::Rhythm), "the zone moved: the same points read differently");
+        apply(&mut g, &PatternStep::Rhythm, "", NOW + DAY).unwrap();
+        let idle = NOW + DAY + rhythm::IDLE_SECS + DAY;
+        assert_eq!(due(&g, idle), Some(PatternStep::Rhythm), "went idle: the line must change tense");
+        let traces = apply(&mut g, &PatternStep::Rhythm, "", idle).unwrap();
+        assert!(traces[0].starts_with("◷ rhythms — Was around "), "{traces:?}");
+        assert_eq!(due(&g, idle), None);
+    }
+
+    #[test]
+    fn folding_the_stream_keeps_the_activity_times_the_rhythm_counts() {
+        let mut g = graph_with_activity(10, 3, Some("UTC"));
+        g.push_episode_acting("a digest landed".into(), vec![], Some(vec![]), NOW, None);
+        g.push_episode_acting("not yet tagged".into(), vec![], None, NOW, None);
+        assert_eq!(g.activity().len(), 30, "only the user acting is presence: a delivery and an untagged event are not");
+        g.episodes.pop();
+        g.fold_oldest(12, None);
+        assert_eq!(g.activity().len(), 30, "the digest carries the times it folded");
+        g.fold_oldest(6, None);
+        assert_eq!(g.activity().len(), 30, "a digest folded again carries them on");
+        assert_eq!(due(&g, NOW), Some(PatternStep::Rhythm));
     }
 
     fn habit_ruling(id: &str, line: &str, adopt: &[&str]) -> String {

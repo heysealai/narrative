@@ -155,6 +155,7 @@ mod tests {
                     line_changed_at: 0,
                     forgotten_at: 0,
                     tally: None,
+                    rhythm: None,
                 },
             );
         }

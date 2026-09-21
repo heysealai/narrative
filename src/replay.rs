@@ -172,8 +172,8 @@ pub fn run(
             usage.add(response.usage);
             stop_reason = response.stop_reason.clone();
             let text = response.text();
-            parsed = harvest::parse_ops(&text)
-                .or_else(|_| harvest::parse_ops(salvage_json(&text)))
+            parsed = harvest::parse_ops(&text, graph.timezone.as_deref())
+                .or_else(|_| harvest::parse_ops(salvage_json(&text), graph.timezone.as_deref()))
                 .ok();
         }
         let parse_failed = parsed.is_none();

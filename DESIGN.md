@@ -44,8 +44,9 @@ This attacks both failure modes structurally:
 Categories cannot be pre-encoded (people differ), but the span of plausible *top-level*
 categories is shallow and quasi-universal. The seed crown is exactly that span: `people`,
 `money`, `work`, `life` (places, health, possessions), `habits` (ways of acting that repeat
-across projects) and `taste` (how the person wants things to look, read and be arranged).
-The personal signature lives one or two levels down, and it shows first under `habits` and
+across projects), `taste` (how the person wants things to look, read and be arranged) and
+`rhythms` (when the person is around, counted from the clock rather than judged). The
+personal signature lives one or two levels down, and it shows first under `habits` and
 `taste`: what someone reaches for whatever they are doing, and the standard they hold every
 output to, are more of a signature than any one project. So:
 
@@ -294,6 +295,20 @@ host was a neobank agent).
   keep their project homes, the distillant goes, and the ledger keeps the marks so a return
   of the behaviour re-mints it with its history. Project and people lines do not decay:
   nothing counts them.
+- **Rhythms**: when the person is around is a count, not a judgment, so no model writes it.
+  The times the user acted (every episode with an action; a digest keeps the times it
+  folded) are read in the user's zone — the host tells the engine the zone the device
+  reports — and each hour counts once per day it was active, so a burst of marks in one
+  hour is one hour of presence. The pass writes the `rhythms` crown's line mechanically
+  from the densest hour window, the quiet weekdays and the active days of the last thirty
+  (`Around in the evenings, usually 21:00–01:00 JST, quiet on Sundays; active 18 of the
+  last 30 days`), recounts as the count grows or goes stale, and switches to past tense
+  when the person has been away two weeks. No zone, no rhythm.
+- **Dates from the model are anchored**: the harvester's turn heading carries the now
+  stamp (weekday, date, time, zone) and every `occurred_at` it writes is a date string
+  counted back from it, resolved by the runtime in the user's zone. A stamp later than the
+  write it rides on is impossible and is dropped on apply, and again on normalize for
+  stamps stored before this held.
 - **Salience**: importance assigned at write, strengthened on retrieval, decayed with
   disuse (a leaf's effective salience halves every 180 idle days); recall within an opened
   category ranks by relevance × recency × importance.
@@ -345,6 +360,7 @@ Episode {
   id, at, occurred_at, text, tags: [distillant ids],
   actions: [verb-shaped tags] | absent,   // what the user did; absent = not yet tagged
   folded_actions: { action: [event times] },  // a digest's ledger of what it folded
+  folded_at: [write times],                   // a digest's record of when the user acted
 }
 
 Distillant {
@@ -360,6 +376,8 @@ Distillant {
   forgotten_at,          // stamped when a forget removed something held here; drift reads it
   tally,                 // a habit's count (all-time / 30d / 7d, first, last, median gap,
                          // spread, faded) — only on habits/* the pattern pass minted
+  rhythm,                // the presence count (zone, hours × days active, densest window,
+                         // active days of 30) — only on the rhythms crown
   // disagreement is DERIVED, not stored: see §Dynamics — Drift. Child timestamps
   // vs consolidated_at; a pass zeroes it by construction.
 }
@@ -367,6 +385,7 @@ Distillant {
 Graph.patterns { verdicts: { action: { ruling: project|noise|faded, at, marks } } }
   // the pattern pass's rulings that minted nothing, so a cluster is re-asked only
   // once it has grown
+Graph.timezone   // the IANA zone the host last saw the user's device in
 
 RoutingTable: single, spans registry + profile; entries point into either tree.
 ```

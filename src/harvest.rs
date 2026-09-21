@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::belief;
+use crate::clock;
 use crate::llm::{ChatRequest, Llm};
 use crate::model::{age_str, is_standing_crown, Belief, Distillant, Graph, Leaf, LeafKind, Nudge, Salience, Species, Supersession, Tree, PROFILE_APEX};
 use crate::projection;
@@ -139,7 +140,7 @@ struct HarvestOut {
     episodes: Vec<EpisodeOp>,
     states: Vec<StateOp>,
     dispositions: Vec<DispositionOp>,
-    rules: Vec<RuleOp>,
+    rules: Vec<RuleOut>,
     reinforces: Vec<ReinforceOp>,
     aliases: Vec<AliasOp>,
     distills: Vec<DistillOp>,
@@ -153,6 +154,25 @@ struct HarvestOut {
     manual_retires: Vec<ManualRetireOp>,
 }
 
+#[derive(Deserialize, Debug, Clone, Default)]
+#[serde(untagged)]
+pub enum When {
+    #[default]
+    Now,
+    Secs(u64),
+    Text(String),
+}
+
+impl When {
+    pub fn resolve(&self, timezone: Option<&str>) -> Option<u64> {
+        match self {
+            When::Now => None,
+            When::Secs(s) => Some(*s),
+            When::Text(t) => clock::parse_local(t, timezone),
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 struct EpisodeOp {
     text: String,
@@ -160,7 +180,19 @@ struct EpisodeOp {
     #[serde(default)]
     actions: Vec<String>,
     #[serde(default)]
-    occurred_at: Option<u64>,
+    occurred_at: When,
+}
+
+#[derive(Deserialize, Debug)]
+struct RuleOut {
+    id: String,
+    text: String,
+    relation: RuleRelation,
+    target: String,
+    #[serde(default)]
+    instruction: String,
+    #[serde(default)]
+    occurred_at: When,
 }
 
 #[derive(Deserialize, Debug)]
@@ -173,7 +205,7 @@ struct StateOp {
     importance: f32,
     aliases: Vec<String>,
     #[serde(default)]
-    occurred_at: Option<u64>,
+    occurred_at: When,
 }
 
 #[derive(Deserialize, Debug)]
@@ -256,7 +288,7 @@ struct ManualRetireOp {
 }
 
 impl HarvestOut {
-    fn into_ops(self) -> Vec<Op> {
+    fn into_ops(self, timezone: Option<&str>) -> Vec<Op> {
         let mut ops = Vec::new();
         for m in self.distillants {
             ops.push(Op::Distillant {
@@ -270,7 +302,7 @@ impl HarvestOut {
         }
         for e in self.episodes {
             if !e.text.trim().is_empty() {
-                ops.push(Op::Episode { text: e.text, tags: e.tags, actions: e.actions, occurred_at: e.occurred_at });
+                ops.push(Op::Episode { text: e.text, tags: e.tags, actions: e.actions, occurred_at: e.occurred_at.resolve(timezone) });
             }
         }
         for s in self.states {
@@ -282,7 +314,7 @@ impl HarvestOut {
                 target: s.target,
                 importance: s.importance,
                 aliases: s.aliases,
-                occurred_at: s.occurred_at,
+                occurred_at: s.occurred_at.resolve(timezone),
             });
         }
         for d in self.dispositions {
@@ -296,7 +328,14 @@ impl HarvestOut {
             });
         }
         for r in self.rules {
-            ops.push(Op::Rule(r));
+            ops.push(Op::Rule(RuleOp {
+                id: r.id,
+                text: r.text,
+                relation: r.relation,
+                target: r.target,
+                instruction: r.instruction,
+                occurred_at: r.occurred_at.resolve(timezone),
+            }));
         }
         for r in self.reinforces {
             ops.push(Op::Reinforce { target: r.target });
@@ -371,7 +410,7 @@ pub fn ops_schema() -> Value {
                         "text": {"type": "string"},
                         "tags": {"type": "array", "items": {"type": "string"}, "description": "involved distillant ids"},
                         "actions": {"type": "array", "items": {"type": "string"}, "description": "what the USER did in this event, as 0-2 short verb-shaped kebab tags ('published-page', 'emailed-result', 'scheduled-run'); reuse a spelling from the action tally when one fits; empty when the event is not the user acting"},
-                        "occurred_at": {"type": ["integer", "null"], "description": "unix seconds when the event actually happened, when the turn says so ('last month', a date, imported backlog); null = it happened now"}
+                        "occurred_at": {"type": ["string", "null"], "description": "when the event actually happened, when the turn says so ('last month', a date, imported backlog): 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM' in the user's zone, counted back from the now stamp on the turn; null = it happened now"}
                     },
                     "required": ["text", "tags", "actions", "occurred_at"],
                     "additionalProperties": false
@@ -390,7 +429,7 @@ pub fn ops_schema() -> Value {
                         "target": {"type": "string", "description": "existing leaf id this relates to; empty string when novel"},
                         "importance": {"type": "number", "description": "0..1; 0.9+ for money rules and critical facts"},
                         "aliases": {"type": "array", "items": {"type": "string"}, "description": "ways the user refers to the THING this fact is about (names, nicknames, handles, addresses), added to the first distillant's routing — never words lifted from the fact itself"},
-                        "occurred_at": {"type": ["integer", "null"], "description": "unix seconds when the fact became true / the change happened, when stated; null = now"}
+                        "occurred_at": {"type": ["string", "null"], "description": "when the fact became true / the change happened, when stated: 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM' in the user's zone, counted back from the now stamp; null = now"}
                     },
                     "required": ["id", "distillants", "text", "relation", "target", "importance", "aliases", "occurred_at"],
                     "additionalProperties": false
@@ -424,7 +463,7 @@ pub fn ops_schema() -> Value {
                         "relation": rule_relation,
                         "target": {"type": "string", "description": "existing rule id this relates to; empty string when novel"},
                         "instruction": {"type": "string", "description": "the id from the 'Instructions to resolve' section this entry answers; empty string when the rule came from ordinary speech"},
-                        "occurred_at": {"type": ["integer", "null"], "description": "unix seconds when the instruction was given, when the turn says so; null = now"}
+                        "occurred_at": {"type": ["string", "null"], "description": "when the instruction was given, when the turn says so: 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM' in the user's zone; null = now"}
                     },
                     "required": ["id", "text", "relation", "target", "instruction", "occurred_at"],
                     "additionalProperties": false
@@ -596,7 +635,7 @@ Rules:
 8. Dispositions: the leaf text states the +1 pole of the axis. dir=+1 pushes toward the statement, dir=-1 against it. The whole profile is shown to you every time (pinned): an observation about a tendency already tracked is a nudge on that existing id — a new leaf only for a genuinely new axis. Keep profile axes few and broad. The profile's root, `character`, is the whole-person estimate consolidation distills from the axes: never hang a leaf there — a disposition always belongs to an axis under it.
 9. Episodes: log events worth remembering as events (payments, decisions, incidents, plans made). Tag with involved distillant ids. Set actions to what the USER did in the event — the verb, as 0-2 short kebab tags ("published-page", "emailed-result", "scheduled-run", "paid-stranger") — reusing a spelling from the action tally whenever one fits, so the count stays one count; an event that is not the user acting (news, someone else's doing, a state of the world) gets an empty list. The leaf ops you emit alongside will be wired to them as evidence automatically.
 10. Use distill to refresh a distillant's one-line summary when what you learned makes the old line stale.
-11. Time: everything is stamped with write time automatically. When the turn says WHEN something actually happened or changed ("last month", "back in 2019", dated backlog text), set occurred_at to unix seconds; otherwise null. Recall renders ages from it — "changed 2mo ago" should mean two months of the user's life, not two months since you wrote it.
+11. Time: everything is stamped with write time automatically. The turn heading carries the now stamp (weekday, date, time, zone); every date you write is counted back from it, never from any other notion of today. When the turn says WHEN something actually happened or changed ("last month", "back in 2019", dated backlog text), set occurred_at to that date as 'YYYY-MM-DD' (add ' HH:MM' when the time is known) in the user's zone; otherwise null. A date after the now stamp is never right: an event that has not happened yet has no occurred_at. Recall renders ages from it — "changed 2mo ago" should mean two months of the user's life, not two months since you wrote it.
 12. Structure follows understanding: when you create a finer distillant that better fits leaves you can see in the comparanda, move those leaves under it with moves entries. Merge ops (merge_leaves, merge_distillants) repair duplicates discovered after the fact — two leaves or distillants that turned out to be the same thing. Use structural ops sparingly in harvest; consolidation does the heavy restructuring.
 13. Forgetting is the user's call and it is final: when the user asks to forget, delete, or stop remembering something, emit a forgets entry for every leaf or distillant that holds it (find them in the comparanda and the directory) and leave no trace of the content anywhere else in this harvest — no episode recording the request, no state restating it. When nothing stored matches, the harvest simply carries nothing about it.
 14. Lines are retrieval scent: a later question can only descend to a leaf if some line on its path advertises the relevant vocabulary. When a leaf carries evaluative weight — trust, regret, fear, pride, conflict — say so in the line alongside the topic ("sworn companion, sold to the captain — parting is a standing regret"), not just the noun-shape ("proves loyal"). A regret no line mentions is a regret recall cannot find; one the line carries routes automatically — the line is the only place it needs to be. Lines are plain prose about the person — never machinery words ("facet", "routing", "distillant", "leaf"), and never this rule's example wording restated as fact: examples illustrate shape, not content.
@@ -905,11 +944,12 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
          # Existing leaves related to this turn (comparanda — cross-match against these)\n{}\n\
          {manual_section}\
          {instructions_section}\
-         # Turn to harvest\nUser: {}\nAssistant: {}",
+         # Turn to harvest (now: {})\nUser: {}\nAssistant: {}",
         render_directory_scoped(graph, scope, &table, &turn_text),
         render_pinned_rules(graph),
         render_pinned_profile(graph),
         render_comparanda(graph, &table, &turn_text, now),
+        clock::stamp(now, graph.timezone.as_deref()),
         user_text,
         assistant_text
     )
@@ -933,10 +973,10 @@ pub fn render_harvest_prompt_scoped(graph: &Graph, input: &HarvestInput, now: u6
     )
 }
 
-pub fn parse_ops(text: &str) -> Result<Vec<Op>> {
+pub fn parse_ops(text: &str, timezone: Option<&str>) -> Result<Vec<Op>> {
     let out: HarvestOut = serde_json::from_str(text)
         .with_context(|| format!("harvester returned unparseable ops: {text}"))?;
-    Ok(out.into_ops())
+    Ok(out.into_ops(timezone))
 }
 
 /// Run the harvester over one finished turn and apply what it found.
@@ -960,7 +1000,7 @@ pub fn run(llm: &dyn Llm, graph: &mut Graph, input: &HarvestInput, now: u64) -> 
         if std::env::var("NARRATIVE_DEBUG").is_ok() {
             eprintln!("[debug] raw harvest: {}", resp.text());
         }
-        match parse_ops(&resp.text()) {
+        match parse_ops(&resp.text(), graph.timezone.as_deref()) {
             Ok(ops) => return Ok(apply_ops(graph, ops, now)),
             Err(e) => last_err = Some(e),
         }
@@ -1159,6 +1199,9 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
     if !repaired.antichained.is_empty() {
         traces.push(format!("⇢ parent sets antichained: {}", repaired.antichained.join(", ")));
     }
+    if repaired.future_stamps_dropped > 0 {
+        traces.push(format!("⇢ dropped {} stored occurred_at stamps later than their write time", repaired.future_stamps_dropped));
+    }
 
     // Distillants first so leaves have somewhere to hang.
     for op in &ops {
@@ -1181,6 +1224,7 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                 line_changed_at: now,
                 forgotten_at: 0,
                 tally: None,
+                rhythm: None,
             });
             let rewritten = existed && !line.is_empty();
             if existed {
@@ -1393,6 +1437,10 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                 ));
             }
         }
+    }
+    let dropped = graph.drop_future_stamps();
+    if dropped > 0 {
+        traces.push(format!("⇢ dropped {dropped} occurred_at stamps later than now — an event cannot postdate the turn that told of it"));
     }
     Applied { traces, rules }
 }
@@ -2250,7 +2298,7 @@ mod tests {
             ]
         })
         .to_string();
-        let ops = parse_ops(&raw).unwrap();
+        let ops = parse_ops(&raw, None).unwrap();
         assert_eq!(ops.len(), 2);
         let applied = apply_ops(&mut g, ops, 1_000);
         let resolved = resolve(&pending, &applied);
@@ -2299,7 +2347,7 @@ mod tests {
         assert!(!stats.contains("ask-first"), "a rule builds no pressure anywhere: {stats}");
         assert!(stats.contains("(1 rules, 0 withdrawn)"), "{stats}");
         // The user's forget covers a rule like any leaf.
-        let ops = parse_ops(&json!({"forgets": [{"target": "ask-first"}]}).to_string()).unwrap();
+        let ops = parse_ops(&json!({"forgets": [{"target": "ask-first"}]}).to_string(), None).unwrap();
         apply_ops(&mut g, ops, 4_000);
         assert!(!g.leaves.contains_key("ask-first"));
     }
@@ -2312,7 +2360,7 @@ mod tests {
             "reinforces": [{"target": "spend"}]
         })
         .to_string();
-        let ops = parse_ops(&raw).unwrap();
+        let ops = parse_ops(&raw, None).unwrap();
         assert!(matches!(ops[0], Op::Disposition { .. }));
         assert!(matches!(&ops[1], Op::Rule(RuleOp { occurred_at: Some(77), .. })));
         assert!(matches!(ops[2], Op::Reinforce { .. }));
@@ -2505,7 +2553,7 @@ mod tests {
             "forgets": [{"target": "eats-katsu-curry"}, {"target": "never-existed"}]
         })
         .to_string();
-        let ops = parse_ops(&raw).unwrap();
+        let ops = parse_ops(&raw, None).unwrap();
         assert!(matches!(ops.last(), Some(Op::Forget { .. })), "forgets sort last in apply order");
         let traces = apply_ops(&mut g, ops, 2_000).traces;
         assert!(!g.leaves.contains_key("eats-katsu-curry"));
@@ -2527,7 +2575,7 @@ mod tests {
             "episodes": [{"text": "Paid rent.", "tags": [], "occurred_at": null}]
         })
         .to_string();
-        let ops = parse_ops(&raw).unwrap();
+        let ops = parse_ops(&raw, None).unwrap();
         // The empty-lesson upsert is dropped at parse; manual ops sort last.
         assert_eq!(ops.len(), 3);
         assert!(matches!(&ops[1], Op::ManualUpsert { tool, service, .. } if tool == "fetch" && service == "resy.com"));
@@ -2681,6 +2729,7 @@ mod tests {
                 line_changed_at: 0,
                 forgotten_at: 0,
                 tally: None,
+                rhythm: None,
             },
         );
         g
@@ -2694,7 +2743,12 @@ mod tests {
         assert!(p.contains("# Output schema"), "schema inline — no source-reading required");
         assert!(p.contains("\"merge_distillants\"") && p.contains("\"rules\""), "every section present");
         assert!(p.contains("# Standing rules (pinned"), "the rules ride pinned for the harvester: {p}");
-        assert!(p.contains("# Turn to harvest\nUser: rent went up to $2,400"));
+        assert!(p.contains("# Turn to harvest (now: Thursday 1970-01-01 00:16 UTC)\nUser: rent went up to $2,400"), "the turn heading anchors the model's calendar: {p}");
+        let mut zoned = Graph::seed();
+        zoned.timezone = Some("Asia/Tokyo".into());
+        let p = render_harvest_prompt(&zoned, &HarvestInput::turn("rent went up to $2,400", "noted"), 1_000);
+        assert!(p.contains("# Turn to harvest (now: Thursday 1970-01-01 09:16 JST (Asia/Tokyo))"), "{p}");
+        assert!(p.contains("counted back from the now stamp"), "rule 11 ties every date to the stamp");
         assert!(p.contains("or a durable way of wanting deserves a distillant"), "rule 3 admits ways of acting and wanting: {p}");
         assert!(p.contains("taste/* for how they want things") && p.contains("habits/* for ways of acting"), "rule 3 names both crowns");
         assert!(p.contains("you never mint a habits/* distillant"), "habits are the pass's to mint");
@@ -2867,25 +2921,59 @@ mod tests {
 
     #[test]
     fn parse_rejects_garbage_and_accepts_sections() {
-        assert!(parse_ops("not json").is_err());
-        assert!(parse_ops("{\"ops\": []}").is_err(), "old tagged-union shape rejected");
+        assert!(parse_ops("not json", None).is_err());
+        assert!(parse_ops("{\"ops\": []}", None).is_err(), "old tagged-union shape rejected");
         let empty = r#"{"distillants": [], "episodes": [], "states": [], "dispositions": [], "aliases": [], "distills": []}"#;
-        assert!(parse_ops(empty).unwrap().is_empty());
+        assert!(parse_ops(empty, None).unwrap().is_empty());
         let one = r#"{"distillants": [], "episodes": [{"text": "paid rent", "tags": []}], "states": [], "dispositions": [], "aliases": [], "distills": []}"#;
-        assert_eq!(parse_ops(one).unwrap().len(), 1);
+        assert_eq!(parse_ops(one, None).unwrap().len(), 1);
         // Degenerate empty-text episodes (the structured-output failure mode) are dropped.
         let degenerate = r#"{"distillants": [], "episodes": [{"text": "", "tags": []}], "states": [], "dispositions": [], "aliases": [], "distills": []}"#;
-        assert!(parse_ops(degenerate).unwrap().is_empty());
+        assert!(parse_ops(degenerate, None).unwrap().is_empty());
         // Sections may be omitted entirely (hand-composed ops files).
-        assert!(parse_ops("{}").unwrap().is_empty());
+        assert!(parse_ops("{}", None).unwrap().is_empty());
         let sparse = r#"{"moves": [{"leaf": "island-goats", "parents": ["life/island/animals"]}]}"#;
-        assert_eq!(parse_ops(sparse).unwrap().len(), 1);
+        assert_eq!(parse_ops(sparse, None).unwrap().len(), 1);
         // occurred_at flows through both null and value forms.
         let timed = r#"{"episodes": [{"text": "washed ashore", "tags": [], "occurred_at": 123}], "states": []}"#;
-        match &parse_ops(timed).unwrap()[0] {
-            Op::Episode { occurred_at, .. } => assert_eq!(*occurred_at, Some(123)),
+        match &parse_ops(timed, None).unwrap()[0] {
+            Op::Episode { occurred_at, .. } => assert_eq!(*occurred_at, Some(123), "a recorded reply's seconds still read"),
             other => panic!("unexpected op {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_date_on_the_wire_resolves_in_the_users_zone_and_nonsense_resolves_to_now() {
+        let dated = r#"{"episodes": [{"text": "moved", "tags": [], "occurred_at": "2026-09-05"}],
+            "states": [{"id": "s", "distillants": ["life"], "text": "t", "relation": "novel", "target": "", "importance": 0.5, "aliases": [], "occurred_at": "2026-09-05 23:22"}],
+            "rules": [{"id": "r", "text": "t", "relation": "novel", "target": "", "instruction": "", "occurred_at": "last month"}]}"#;
+        let ops = parse_ops(dated, Some("Asia/Tokyo")).unwrap();
+        let Op::Episode { occurred_at, .. } = &ops[0] else { panic!("{:?}", ops[0]) };
+        assert_eq!(*occurred_at, Some(1_788_577_200), "noon in Tokyo");
+        let Op::State { occurred_at, .. } = &ops[1] else { panic!("{:?}", ops[1]) };
+        assert_eq!(*occurred_at, Some(1_788_618_120), "23:22 in Tokyo is 14:22 UTC");
+        let Op::Rule(rule) = &ops[2] else { panic!("{:?}", ops[2]) };
+        assert_eq!(rule.occurred_at, None, "words that are not a date stamp nothing");
+    }
+
+    #[test]
+    fn a_stamp_after_the_write_is_dropped_on_apply_and_on_the_next_normalize() {
+        let mut g = Graph::seed();
+        let now = 1_788_618_600;
+        let future = Op::Episode { text: "will happen".into(), tags: vec![], actions: vec![], occurred_at: Some(now + 40 * 86_400) };
+        let applied = apply_ops(&mut g, vec![future], now);
+        assert!(applied.traces.iter().any(|t| t.starts_with("⇢ dropped 1 occurred_at stamps later than now")), "{:?}", applied.traces);
+        assert_eq!(g.episodes[0].occurred_at, None);
+        g.episodes[0].occurred_at = Some(now + 400 * 86_400);
+        g.leaves.insert("l".into(), Leaf::state("l".into(), "x".into(), vec!["life".into()], 0.5, now));
+        g.leaves.get_mut("l").unwrap().occurred_at = Some(now + 400 * 86_400);
+        let applied = apply_ops(&mut g, vec![], now);
+        assert!(applied.traces.iter().any(|t| t == "⇢ dropped 2 stored occurred_at stamps later than their write time"), "{:?}", applied.traces);
+        assert_eq!(g.episodes[0].occurred_at, None);
+        assert_eq!(g.leaves["l"].occurred_at, None);
+        let same_day = Op::Episode { text: "this morning".into(), tags: vec![], actions: vec![], occurred_at: Some(now + 3_600) };
+        let applied = apply_ops(&mut g, vec![same_day], now);
+        assert!(!applied.traces.iter().any(|t| t.contains("dropped")), "a stamp within a day of the write stands (zones): {:?}", applied.traces);
     }
 
     #[test]

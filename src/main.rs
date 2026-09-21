@@ -30,6 +30,8 @@ narrative — structured long-term memory engine
                                   apply a pattern response to the due step (a
                                   fold takes no response)
   narrative habits                the standing habits with their counts
+  narrative timezone <iana-name>  set the user's zone (rhythms count in it; the
+                                  harvester's now stamp and dates read in it)
   narrative open <distillant-id>    read leaves under one distillant
   narrative rules                 standing instructions (pinned first)
   narrative profile               pinned tier (always-inline profile)
@@ -127,7 +129,7 @@ fn main() -> Result<()> {
                 _ => "-".to_string(),
             };
             let raw = text_arg(&src)?;
-            let ops = harvest::parse_ops(&raw)?;
+            let ops = harvest::parse_ops(&raw, graph.timezone.as_deref())?;
             for t in harvest::apply_ops(&mut graph, ops, now).traces {
                 println!("✎ {t}");
             }
@@ -195,6 +197,16 @@ fn main() -> Result<()> {
             for t in pattern::apply(&mut graph, &step, &raw, now)? {
                 println!("✎ {t}");
             }
+            print_due_hints(&graph, now);
+            store::save(&data_file, &graph)?;
+        }
+        "timezone" => {
+            let name = args.get(1).map(String::as_str).unwrap_or("");
+            if narrative::clock::zone(name).is_none() {
+                bail!("not an IANA zone name: {name:?}");
+            }
+            graph.timezone = Some(name.to_string());
+            println!("zone set: {name}");
             print_due_hints(&graph, now);
             store::save(&data_file, &graph)?;
         }

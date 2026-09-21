@@ -776,6 +776,17 @@ pub fn stats(graph: &Graph, now: u64) -> String {
         habits.len(),
         graph.patterns.verdicts.len()
     );
+    let rhythm = graph.distillants.get(crate::model::RHYTHMS).and_then(|m| m.rhythm.as_ref());
+    let _ = writeln!(
+        out,
+        "rhythms: {} activity marks · zone {} · {}",
+        graph.activity().len(),
+        graph.timezone.as_deref().unwrap_or("unknown"),
+        match rhythm {
+            Some(r) => format!("counted {} ({} marks)", crate::model::age_str(now, r.computed_at), r.n),
+            None => "not counted yet".to_string(),
+        }
+    );
     match due(graph) {
         Some(id) => {
             let _ = writeln!(
@@ -1169,6 +1180,7 @@ mod tests {
                 line_changed_at: 0,
                 forgotten_at: 0,
                 tally: None,
+                rhythm: None,
             },
         );
     }
