@@ -316,6 +316,13 @@ impl Llm for MockLlm {
                     usage: Usage::default(),
                 });
             }
+            if raw.starts_with("Node: ") && raw.contains("\nDirect children: ") {
+                return Ok(ChatResponse {
+                    content: vec![json!({"type": "text", "text": json!({"groups": []}).to_string()})],
+                    stop_reason: "end_turn".to_string(),
+                    usage: Usage::default(),
+                });
+            }
             if raw.starts_with("# Action vocabulary so far") {
                 return Ok(ChatResponse {
                     content: vec![json!({"type": "text", "text": json!({"tags": []}).to_string()})],

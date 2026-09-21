@@ -32,9 +32,10 @@ the middle is the understanding, the edges are the receipts.
 This attacks both failure modes structurally:
 
 - **Staleness dies** because the thing that must always be in context — the category
-  skeleton (labels + lines) — is *small by construction*. The layer compresses as it
-  grows instead of accumulating. Nothing is selectively read; only leaf-opening is
-  selective.
+  map — is *small by construction*. The map shows names, not content: an entry is what
+  the model needs to choose a node among its siblings (id, label, leaf count); the line is
+  content and is one open away. The layer compresses as it grows instead of accumulating.
+  Nothing is selectively read; only leaf-opening is selective.
 - **Confidence-vibes die** because there is no retrieval scorer. Recall is the model reading
   a legible map in-context and deciding, with judgment, which branch matters. Confidence
   comes from comprehension of labels, not a similarity threshold.
@@ -65,7 +66,13 @@ output to, are more of a signature than any one project. So:
   children has a line that is the median of fifty unrelated things, which is no median at
   all. Distillation pressure — split what is fat, fold what is wide — keeps every node's
   fan small enough that its line can be one true sentence; see "tree health = retrieval
-  health" below.
+  health" below. The capacity is one number for both: the leaves a node may hold before
+  it is fat is also the children it may list before it is wide (eight). A node over it is
+  **regrouped**: the model is shown its children and names intermediate groups — what the
+  children *are* to this person, never a letter or a date — and each group becomes a
+  child that takes its members. A group the fold made renders **closed** on the map (name
+  and member count, no members; the model opens it), harvester-made hierarchy renders open.
+  A node the model declined to regroup stays quiet until its child count changes.
 
 ## The three stores, and the rules beside them
 
@@ -142,17 +149,20 @@ correction of register or length the user makes once is a rule from that moment 
    facets). Stray model-written facet terms are gated against the line. (Measured
    before adoption, then re-measured: `docs/facet-routing-discovery.md`.)
 2. **BFS** (model-driven, fallback): when the address isn't obvious, the model — which has
-   already read the inline skeleton — opens a branch, reads children's descriptors,
-   descends or backtracks via an `open(path)` tool. Cheap because the tree is shallow and
-   branching is bounded: the frontier always fits in a glance.
+   already read the inline map — opens a branch, reads children's descriptors,
+   descends or backtracks via an `open(path)` tool. Cheap because branching is bounded
+   by the capacity and fold-made groups render closed: the visible frontier always fits in
+   a glance. Siblings list by liveness (strongest leaf belief, then the latest write), so
+   the live branches sit first.
 
 **The compile-down principle** (recurring trick): write-time intelligence compiles into
 dumb, fast, read-time artifacts. Distillation → skeleton; entity linking → alias tables;
 routing → keyword maps. The model is never in the hot path, but its judgment is — cached.
 
-**Tree health = retrieval health.** Projection works only while the skeleton fits in
-context; BFS stays cheap only while the tree stays shallow. The optimizer isn't tidying for
-aesthetics — compression maintains the invariant both retrieval modes depend on.
+**Tree health = retrieval health.** Projection works only while the map fits in
+context; BFS stays cheap only while every node's fan stays under capacity. The optimizer
+isn't tidying for aesthetics — compression maintains the invariant both retrieval modes
+depend on.
 
 ## Write path — ambient, no remember-tool
 
@@ -376,6 +386,8 @@ Distillant {
   residual: misc_count,        // gradient accumulator: facts parked here for lack of better
   line_changed_at,       // stamped on MATERIAL line change; parents read it as drift
   forgotten_at,          // stamped when a forget removed something held here; drift reads it
+  grouped_at,            // stamped on a group the fold made; it renders closed on the map
+  regrouped_children,    // the fan the fold last ruled on; over capacity and unchanged = quiet
   tally,                 // a habit's count (all-time / 30d / 7d, first, last, median gap,
                          // spread, faded) — only on habits/* the pattern pass minted
   rhythm,                // the presence count (zone, hours × days active, densest window,

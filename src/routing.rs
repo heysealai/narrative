@@ -156,6 +156,8 @@ mod tests {
                     forgotten_at: 0,
                     tally: None,
                     rhythm: None,
+                    grouped_at: 0,
+                    regrouped_children: 0,
                 },
             );
         }

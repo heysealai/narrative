@@ -417,6 +417,18 @@ pub struct Distillant {
     pub tally: Option<Tally>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rhythm: Option<Rhythm>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub grouped_at: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub regrouped_children: u32,
+}
+
+fn is_zero(v: &u64) -> bool {
+    *v == 0
+}
+
+fn is_zero_u32(v: &u32) -> bool {
+    *v == 0
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -476,6 +488,8 @@ impl Distillant {
             forgotten_at: 0,
             tally: None,
             rhythm: None,
+            grouped_at: 0,
+            regrouped_children: 0,
         }
     }
 
@@ -539,6 +553,21 @@ pub const PROFILE_APEX: &str = "character";
 pub const HABITS: &str = "habits";
 pub const TASTE: &str = "taste";
 pub const RHYTHMS: &str = "rhythms";
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Liveness {
+    pub strength: f32,
+    pub recency: u64,
+}
+
+impl Liveness {
+    pub fn order(a: &Self, b: &Self) -> std::cmp::Ordering {
+        b.strength
+            .partial_cmp(&a.strength)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.recency.cmp(&a.recency))
+    }
+}
 pub const STAMP_SLACK_SECS: u64 = 86_400;
 
 struct Crown {
@@ -698,6 +727,37 @@ impl Graph {
             .values()
             .filter(|m| m.parents.iter().any(|p| p == distillant_id))
             .collect()
+    }
+
+    pub fn descendant_distillant_ids(&self, distillant_id: &str) -> Vec<Id> {
+        let mut out: Vec<Id> = Vec::new();
+        let mut frontier = vec![distillant_id.to_string()];
+        while let Some(id) = frontier.pop() {
+            for c in self.child_distillants(&id) {
+                if !out.contains(&c.id) {
+                    out.push(c.id.clone());
+                    frontier.push(c.id.clone());
+                }
+            }
+        }
+        out
+    }
+
+    pub fn liveness(&self, distillant_id: &str) -> Liveness {
+        let mut ids = self.descendant_distillant_ids(distillant_id);
+        ids.push(distillant_id.to_string());
+        let mut best = Liveness::default();
+        for id in &ids {
+            if let Some(m) = self.distillants.get(id) {
+                best.recency = best.recency.max(m.line_changed_at);
+            }
+            for l in self.leaves_under(id) {
+                let strength = l.kind.belief().map(crate::belief::strength).unwrap_or(0.0);
+                best.strength = best.strength.max(strength);
+                best.recency = best.recency.max(l.updated_at);
+            }
+        }
+        best
     }
 
     pub fn roots(&self, tree: Tree) -> Vec<&Distillant> {
@@ -1226,6 +1286,8 @@ mod tests {
                     forgotten_at: 0,
                     tally: None,
                     rhythm: None,
+                    grouped_at: 0,
+                    regrouped_children: 0,
                 },
             );
         }

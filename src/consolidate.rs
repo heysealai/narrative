@@ -16,8 +16,8 @@ use serde_json::{json, Value};
 use crate::harvest::{self, Op};
 use crate::llm::{ChatRequest, Llm};
 use crate::model::{
-    age_str, Graph, Id, Tree, COMPRESS_BATCH, DIGEST_MIN_CUT, DIGEST_WINDOW, MECH_DIGEST_PREFIX, PROFILE_APEX,
-    STREAM_CAP,
+    age_str, slugify, Graph, Id, Tree, COMPRESS_BATCH, DIGEST_MIN_CUT, DIGEST_WINDOW, MECH_DIGEST_PREFIX,
+    PROFILE_APEX, STREAM_CAP,
 };
 use crate::pattern;
 
@@ -502,7 +502,218 @@ pub fn due(graph: &Graph) -> Option<String> {
     Some(cur)
 }
 
+pub const FAN_OUT_CAPACITY: usize = FAT_LEAF_THRESHOLD;
+
+pub fn fan_out(graph: &Graph, distillant_id: &str) -> usize {
+    graph.child_distillants(distillant_id).len()
+}
+
+pub fn regroup_due(graph: &Graph) -> Option<String> {
+    graph
+        .distillants
+        .values()
+        .filter(|m| m.tree == Tree::Registry)
+        .map(|m| (m, fan_out(graph, &m.id)))
+        .filter(|(m, n)| *n > FAN_OUT_CAPACITY && *n as u32 != m.regrouped_children)
+        .max_by(|(a, n), (b, k)| n.cmp(k).then_with(|| b.id.cmp(&a.id)))
+        .map(|(m, _)| m.id.clone())
+}
+
+const REGROUP_SYSTEM: &str = "You regroup one over-wide node of a personal memory tree. The map the assistant reads lists a node's children one line each, so a node with dozens of children costs every request dozens of lines and hides the live ones among the rest. Its direct children are listed below (id, label, line, what hangs under each). Propose intermediate groups: each group is a new child of this node that takes some of the current children as its own.
+
+A group is what the children ARE to this person — the kind of undertaking, who it is with, what it is for — never a letter of the alphabet, a date range, or a size. Name it the way the person would (label), give it one plain line saying what the members have in common, and routing terms a message about any member would carry and a message about the rest would not. A group holds at least two members; a child stands alone only when nothing else here is its kind. Aim for {capacity} or fewer entries under this node afterwards (groups plus whatever stays direct): few groups, each with a real common thread. Every member id must be one of the listed children, used once. Never a group named like the node itself.";
+
+fn regroup_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "groups": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "description": "kebab-case slug for the group under this node (the node's path is prepended)"},
+                        "label": {"type": "string"},
+                        "line": {"type": "string", "description": "one plain line: what the members have in common for this person"},
+                        "routing": {"type": "array", "items": {"type": "string"}},
+                        "members": {"type": "array", "items": {"type": "string"}, "description": "ids of the listed children this group takes, at least two"}
+                    },
+                    "required": ["id", "label", "line", "routing", "members"],
+                    "additionalProperties": false
+                }
+            }
+        },
+        "required": ["groups"],
+        "additionalProperties": false
+    })
+}
+
+#[derive(Deserialize)]
+struct Regrouped {
+    #[serde(default)]
+    groups: Vec<GroupSpec>,
+}
+
+#[derive(Deserialize)]
+struct GroupSpec {
+    id: String,
+    label: String,
+    line: String,
+    #[serde(default)]
+    routing: Vec<String>,
+    #[serde(default)]
+    members: Vec<String>,
+}
+
+fn regroup_body(graph: &Graph, distillant_id: &str) -> Option<String> {
+    let m = graph.distillants.get(distillant_id)?;
+    let mut children = graph.child_distillants(distillant_id);
+    children.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut body = format!(
+        "Node: {} (label: {})
+Line: {}
+Direct children: {} (capacity {})
+
+Children:
+",
+        m.id,
+        m.label,
+        m.headline(),
+        children.len(),
+        FAN_OUT_CAPACITY
+    );
+    for c in children {
+        let under = match (graph.leaves_under(&c.id).len(), fan_out(graph, &c.id)) {
+            (0, 0) => String::new(),
+            (leaves, 0) => format!(" [{leaves} leaves]"),
+            (0, kids) => format!(" [{kids} children]"),
+            (leaves, kids) => format!(" [{leaves} leaves, {kids} children]"),
+        };
+        let _ = writeln!(body, "- {} — {} — {}{under}", c.id, c.label, c.headline());
+    }
+    Some(body)
+}
+
+pub fn render_regroup_prompt(graph: &Graph, distillant_id: &str) -> Option<String> {
+    let body = regroup_body(graph, distillant_id)?;
+    Some(format!(
+        "# System
+{}
+
+# Output schema (reply with one JSON object matching it)
+{}
+
+# Input
+{body}",
+        REGROUP_SYSTEM.replace("{capacity}", &FAN_OUT_CAPACITY.to_string()),
+        serde_json::to_string_pretty(&regroup_schema()).expect("static schema serializes")
+    ))
+}
+
+pub fn apply_regroup(graph: &mut Graph, distillant_id: &str, raw: &str, now: u64) -> Result<Vec<String>> {
+    let Some(m) = graph.distillants.get(distillant_id) else {
+        anyhow::bail!("no distillant {distillant_id}");
+    };
+    let tree = m.tree;
+    let out: Regrouped = serde_json::from_str(raw)?;
+    let before = fan_out(graph, distillant_id);
+    let children: Vec<String> = graph.child_distillants(distillant_id).iter().map(|c| c.id.clone()).collect();
+    let mut taken: Vec<String> = Vec::new();
+    let mut traces = Vec::new();
+    let mut made: Vec<(String, usize)> = Vec::new();
+    for g in out.groups {
+        let slug = slugify(g.id.rsplit('/').next().unwrap_or(&g.id));
+        if slug.is_empty() {
+            traces.push(format!("⚠ regroup {distillant_id}: a group with no usable id skipped"));
+            continue;
+        }
+        let id = format!("{distillant_id}/{slug}");
+        let members: Vec<String> = g
+            .members
+            .iter()
+            .map(|c| c.trim().to_string())
+            .filter(|c| children.contains(c) && !taken.contains(c))
+            .fold(Vec::new(), |mut acc, c| {
+                if !acc.contains(&c) {
+                    acc.push(c);
+                }
+                acc
+            });
+        if members.len() < 2 {
+            traces.push(format!("⚠ regroup {distillant_id}: group {id} names fewer than two of the children; skipped"));
+            continue;
+        }
+        if graph.distillants.contains_key(&id) {
+            traces.push(format!("⚠ regroup {distillant_id}: {id} already exists; group skipped"));
+            continue;
+        }
+        let mut ops = vec![Op::Distillant {
+            id: id.clone(),
+            tree,
+            label: g.label.trim().to_string(),
+            line: g.line.trim().to_string(),
+            routing: g.routing,
+            parents: vec![distillant_id.to_string()],
+        }];
+        for member in &members {
+            let parents: Vec<String> = graph
+                .distillants
+                .get(member)
+                .map(|c| c.parents.iter().map(|p| if p == distillant_id { id.clone() } else { p.clone() }).collect())
+                .unwrap_or_default();
+            ops.push(Op::Reparent { distillant: member.clone(), parents });
+        }
+        traces.extend(harvest::apply_ops(graph, ops, now).traces);
+        if let Some(group) = graph.distillants.get_mut(&id) {
+            group.grouped_at = now;
+            group.consolidated_at = now;
+            group.line_changed_at = now;
+        }
+        taken.extend(members.iter().cloned());
+        made.push((id, members.len()));
+    }
+    let after = fan_out(graph, distillant_id);
+    if let Some(m) = graph.distillants.get_mut(distillant_id) {
+        m.regrouped_children = after as u32;
+    }
+    match made.is_empty() {
+        true => traces.push(format!("⊞ regroup of {distillant_id} made no group; its {before} children stay until the count changes")),
+        false => {
+            let groups: Vec<String> = made.iter().map(|(id, n)| format!("{id} ×{n}")).collect();
+            traces.push(format!(
+                "⊞ regrouped {distillant_id}: {} → {} children — {}; {} left direct",
+                before,
+                after,
+                groups.join(", "),
+                after.saturating_sub(made.len())
+            ));
+        }
+    }
+    Ok(traces)
+}
+
+pub fn regroup(llm: &dyn Llm, graph: &mut Graph, distillant_id: &str, now: u64) -> Result<Vec<String>> {
+    let Some(body) = regroup_body(graph, distillant_id) else {
+        return Ok(vec![format!("no distillant {distillant_id}")]);
+    };
+    let req = ChatRequest {
+        system: REGROUP_SYSTEM.replace("{capacity}", &FAN_OUT_CAPACITY.to_string()),
+        messages: vec![json!({"role": "user", "content": body})],
+        tools: vec![],
+        output_schema: Some(regroup_schema()),
+        max_tokens: 4096,
+        thinking: false,
+    };
+    let resp = llm.chat(&req)?;
+    apply_regroup(graph, distillant_id, &resp.text(), now)
+}
+
 pub fn auto_step(llm: &dyn Llm, graph: &mut Graph, now: u64) -> Result<Vec<String>> {
+    if let Some(id) = regroup_due(graph) {
+        let mut traces = vec![format!("⚙ regrouping {id} ({} children, capacity {FAN_OUT_CAPACITY})", fan_out(graph, &id))];
+        traces.extend(regroup(llm, graph, &id, now)?);
+        return Ok(traces);
+    }
     if let Some(id) = due(graph) {
         let mut traces = vec![format!("⚙ consolidating {} (pressure {})", id, pressure(graph, &id))];
         traces.extend(redistill(llm, graph, &id, now)?);
@@ -787,6 +998,18 @@ pub fn stats(graph: &Graph, now: u64) -> String {
             None => "not counted yet".to_string(),
         }
     );
+    let widest = graph
+        .distillants
+        .values()
+        .filter(|m| m.tree == Tree::Registry)
+        .map(|m| (m.id.clone(), fan_out(graph, &m.id)))
+        .max_by(|(a, n), (b, k)| n.cmp(k).then_with(|| b.cmp(a)));
+    if let Some((id, n)) = widest {
+        let _ = writeln!(out, "widest: {id} ({n} children, capacity {FAN_OUT_CAPACITY})");
+    }
+    if let Some(id) = regroup_due(graph) {
+        let _ = writeln!(out, "regroup due: {id} ({} children)", fan_out(graph, &id));
+    }
     match due(graph) {
         Some(id) => {
             let _ = writeln!(
@@ -820,6 +1043,109 @@ mod tests {
     use super::*;
     use crate::llm::MockLlm;
     use crate::model::{Graph, Leaf};
+
+    fn wide(children: usize) -> Graph {
+        let mut g = Graph::seed();
+        for i in 0..children {
+            let id = format!("work/p{i}");
+            let mut m = crate::model::Distillant::bare(&id, Tree::Registry, &format!("Project {i}"), vec!["work".into()], vec![]);
+            m.line = format!("Project {i} is a thing.");
+            m.line_changed_at = 1_000;
+            g.distillants.insert(id.clone(), m);
+            let l = Leaf::state(format!("f{i}"), format!("fact {i}"), vec![id], 0.5, 1_000);
+            g.leaves.insert(l.id.clone(), l);
+        }
+        g
+    }
+
+    fn groups(spec: &[(&str, &[&str])]) -> String {
+        json!({"groups": spec.iter().map(|(id, members)| json!({
+            "id": id, "label": id.to_uppercase(), "line": format!("What {id} share."),
+            "routing": [id.to_string()], "members": members
+        })).collect::<Vec<_>>()})
+        .to_string()
+    }
+
+    #[test]
+    fn a_node_over_capacity_is_due_for_a_regroup_and_the_widest_goes_first() {
+        let g = wide(FAN_OUT_CAPACITY);
+        assert_eq!(regroup_due(&g), None, "at capacity is not over it");
+        let mut g = wide(FAN_OUT_CAPACITY + 1);
+        assert_eq!(regroup_due(&g).as_deref(), Some("work"));
+        for i in 0..FAN_OUT_CAPACITY + 3 {
+            let id = format!("people/q{i}");
+            g.distillants.insert(id.clone(), crate::model::Distillant::bare(&id, Tree::Registry, "q", vec!["people".into()], vec![]));
+        }
+        assert_eq!(regroup_due(&g).as_deref(), Some("people"), "the widest first");
+        let mut axis_heavy = Graph::seed();
+        for i in 0..FAN_OUT_CAPACITY + 2 {
+            let id = format!("temperament/t{i}");
+            axis_heavy.distillants.insert(id.clone(), crate::model::Distillant::bare(&id, Tree::Profile, "t", vec!["temperament".into()], vec![]));
+        }
+        assert_eq!(regroup_due(&axis_heavy), None, "the profile tree is not the map's fan-out problem");
+        assert!(render_regroup_prompt(&g, "work").unwrap().contains("Direct children: 9 (capacity 8)"));
+    }
+
+    #[test]
+    fn a_regroup_makes_closed_groups_reparents_members_and_leaves_the_rest_direct() {
+        let mut g = wide(12);
+        let raw = groups(&[
+            ("hosting", &["work/p0", "work/p1", "work/p2", "work/p3"]),
+            ("films", &["work/p4", "work/p5", "work/p6"]),
+            ("work/research", &["work/p7", "work/p8"]),
+            ("solo", &["work/p9"]),
+            ("ghosts", &["work/nope", "work/p10", "work/p10"]),
+            ("hosting", &["work/p10", "work/p11"]),
+        ]);
+        let traces = apply_regroup(&mut g, "work", &raw, 2_000).unwrap();
+        assert!(traces.iter().any(|t| t.starts_with("⊞ regrouped work: 12 → 6 children — work/hosting ×4, work/films ×3, work/research ×2; 3 left direct")), "{traces:?}");
+        assert!(traces.iter().any(|t| t.contains("group work/solo names fewer than two")), "{traces:?}");
+        assert!(traces.iter().any(|t| t.contains("group work/ghosts names fewer than two")), "an unknown member and a repeat do not count: {traces:?}");
+        assert!(traces.iter().any(|t| t.contains("work/hosting already exists")), "{traces:?}");
+        let hosting = &g.distillants["work/hosting"];
+        assert_eq!(hosting.parents, vec!["work".to_string()]);
+        assert_eq!(hosting.grouped_at, 2_000);
+        assert_eq!(hosting.line, "What hosting share.");
+        assert_eq!((hosting.consolidated_at, hosting.line_changed_at), (2_000, 2_000));
+        assert_eq!(g.distillants["work/p0"].parents, vec!["work/hosting".to_string()]);
+        assert_eq!(g.distillants["work/p9"].parents, vec!["work".to_string()], "ungrouped stays direct");
+        assert_eq!(g.distillants["work/p10"].parents, vec!["work".to_string()], "a member of a skipped group stays direct");
+        assert_eq!(fan_out(&g, "work"), 6);
+        assert_eq!(g.distillants["work"].regrouped_children, 6);
+        assert_eq!(regroup_due(&g), None, "under capacity now");
+        let map = crate::projection::render_registry_skeleton(&g);
+        assert!(map.contains("  - work/hosting — HOSTING (4 inside)\n"), "{map}");
+        assert!(!map.contains("work/p0"), "{map}");
+        assert!(map.contains("  - work/p9 — Project 9 [1 leaves]\n"), "{map}");
+    }
+
+    #[test]
+    fn a_regroup_that_makes_nothing_is_not_reasked_until_the_count_changes() {
+        let mut g = wide(10);
+        let traces = apply_regroup(&mut g, "work", &groups(&[]), 2_000).unwrap();
+        assert!(traces.iter().any(|t| t.starts_with("⊞ regroup of work made no group; its 10 children stay")), "{traces:?}");
+        assert_eq!(regroup_due(&g), None, "declined at ten: quiet");
+        let id = "work/p10".to_string();
+        g.distillants.insert(id.clone(), crate::model::Distillant::bare(&id, Tree::Registry, "Project 10", vec!["work".into()], vec![]));
+        assert_eq!(regroup_due(&g).as_deref(), Some("work"), "eleven is a new count");
+        let partial = groups(&[("pair", &["work/p0", "work/p1"])]);
+        apply_regroup(&mut g, "work", &partial, 3_000).unwrap();
+        assert_eq!(fan_out(&g, "work"), 10);
+        assert_eq!(regroup_due(&g), None, "still over capacity, but ruled at this count: quiet until it changes");
+    }
+
+    #[test]
+    fn the_regroup_goes_before_the_redistill_in_the_automatic_step() {
+        let mut g = wide(FAN_OUT_CAPACITY + 1);
+        g.distillants.get_mut("work").unwrap().misc_count = 5;
+        assert!(due(&g).is_some(), "the crown is also due a redistill");
+        let llm = MockLlm::scripted(vec![json!([{"type": "text", "text": groups(&[("pair", &["work/p0", "work/p1"])])}])]);
+        let traces = auto_step(&llm, &mut g, 2_000).unwrap();
+        assert!(traces[0].starts_with("⚙ regrouping work (9 children, capacity 8)"), "{traces:?}");
+        assert!(g.distillants.contains_key("work/pair"));
+        let report = stats(&g, 2_000);
+        assert!(report.contains("widest: work (8 children, capacity 8)"), "{report}");
+    }
 
     #[test]
     fn redistill_applies_model_output() {
@@ -1181,6 +1507,8 @@ mod tests {
                 forgotten_at: 0,
                 tally: None,
                 rhythm: None,
+                grouped_at: 0,
+                regrouped_children: 0,
             },
         );
     }
