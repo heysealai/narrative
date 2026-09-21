@@ -31,7 +31,7 @@ pub const TAG_VOCABULARY_LINES: usize = 80;
 pub const PROMPT_EVENTS: usize = 12;
 pub const PROMPT_LEAVES: usize = 20;
 pub const PROMPT_EPISODE_CHARS: usize = 300;
-pub const ROUTING_MAX: usize = 12;
+pub const ROUTING_MAX: usize = 16;
 pub const PROMPT_MEANS: usize = 6;
 pub const MEANS_MIN_EVENTS: usize = 2;
 const ROUTING_STOPWORDS: &[&str] = &[
@@ -248,13 +248,15 @@ stopped (no marks for several times its usual gap) is past tense: 'ran pranks on
 month; none since'. The tally is the evidence: never claim a rhythm the numbers do not show. \
 Plain prose about the person, never machinery words (tally, distillant, routing).\n\
 \n\
-Routing is the recall vocabulary: 5 to 12 terms, the nouns and verbs a request for THIS \
+Routing is the recall vocabulary: 5 to 16 terms, the nouns and verbs a request for THIS \
 behaviour would carry and a request for anything else would not ('website', 'site', 'page', \
 'publish', 'put it online'), including the name of the means the habit runs on in the forms a \
 message would carry ('stacktree', 'stacktr.ee'). Never a page's own URL, a project's name, the \
 tag's own spelling, or a word a message about anything could contain (for, on, run, again, \
 try, see if, make): every stray term routes unrelated messages here. Matching is exact-token, \
-no stemming: include the forms a message would actually contain (page AND pages).\n\
+no stemming and no compounds: include every form a message would actually contain — plural \
+and singular (page AND pages), the compound and the split (website AND webpage AND web page), \
+the noun and the verb (publish AND published).\n\
 \n\
 adopt_leaves names the evidence leaves listed below that ARE this habit in action (a page \
 published, a run scheduled); the habit becomes their second parent and the project keeps \
@@ -277,7 +279,7 @@ fn rule_schema() -> Value {
             "id": {"type": "string", "description": "habits/<kebab> — the existing id when one is shown; empty when the verdict is not habit"},
             "label": {"type": "string", "description": "short label; empty when not habit"},
             "line": {"type": "string", "description": "one sentence about the person in the tense the tally supports; empty when not habit"},
-            "routing": {"type": "array", "items": {"type": "string"}, "description": "the recall vocabulary for this habit, 5 to 12 terms (replaces the current set): the nouns and verbs a request for this behaviour would carry and a request for anything else would not"},
+            "routing": {"type": "array", "items": {"type": "string"}, "description": "the recall vocabulary for this habit, 5 to 16 terms (replaces the current set): the nouns and verbs a request for this behaviour would carry and a request for anything else would not"},
             "adopt_leaves": {"type": "array", "items": {"type": "string"}, "description": "ids of the listed evidence leaves that are this habit in action"},
             "adopt_distillants": {"type": "array", "items": {"type": "string"}, "description": "ids of the listed recurring distillants that are the means this habit runs on (the tool, service, channel, place); empty when the habit runs on nothing in particular"},
             "reason": {"type": "string", "description": "one line: why this verdict"}
