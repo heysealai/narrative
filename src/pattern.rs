@@ -32,6 +32,8 @@ pub const PROMPT_EVENTS: usize = 12;
 pub const PROMPT_LEAVES: usize = 20;
 pub const PROMPT_EPISODE_CHARS: usize = 300;
 pub const ROUTING_MAX: usize = 12;
+pub const PROMPT_MEANS: usize = 6;
+pub const MEANS_MIN_EVENTS: usize = 2;
 const ROUTING_STOPWORDS: &[&str] = &[
     "a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "by", "for", "with", "from", "it", "its", "is", "be",
     "do", "does", "did", "me", "my", "i", "you", "your", "we", "us", "he", "she", "they", "them", "this", "that", "these",
@@ -236,8 +238,10 @@ the person acting at all. An action so broad it underlies nearly every event (as
 paying in general) is a trait or noise, never a habit: a habit is specific enough that its \
 routing catches requests for it and little else.\n\
 \n\
-The line is ONE short sentence about the person (under 160 characters): what they do and what \
-for, in the tense the tally supports. Never restate the numbers — the count renders beside the \
+The line is ONE short sentence about the person (under 160 characters): what they do, what \
+for, and — when the events run on one tool, service, channel or place that recurs under \
+them — by what means ('publishes a Stacktree page for almost anything he makes'): the means is \
+part of the habit. Write it in the tense the tally supports. Never restate the numbers — the count renders beside the \
 line automatically — and never list instances. A count still growing (marks in the last 7 or 30 \
 days) is present tense: 'publishes a hosted page for almost anything he makes'. A count that \
 stopped (no marks for several times its usual gap) is past tense: 'ran pranks on friends for a \
@@ -246,14 +250,20 @@ Plain prose about the person, never machinery words (tally, distillant, routing)
 \n\
 Routing is the recall vocabulary: 5 to 12 terms, the nouns and verbs a request for THIS \
 behaviour would carry and a request for anything else would not ('website', 'site', 'page', \
-'publish', 'put it online'). Never a URL, a project name, the tag's own spelling, or a word a \
-message about anything could contain (for, on, run, again, try, see if, make): every stray term \
-routes unrelated messages here. Matching is exact-token, no stemming: include the forms a \
-message would actually contain (page AND pages).\n\
+'publish', 'put it online'), including the name of the means the habit runs on in the forms a \
+message would carry ('stacktree', 'stacktr.ee'). Never a page's own URL, a project's name, the \
+tag's own spelling, or a word a message about anything could contain (for, on, run, again, \
+try, see if, make): every stray term routes unrelated messages here. Matching is exact-token, \
+no stemming: include the forms a message would actually contain (page AND pages).\n\
 \n\
 adopt_leaves names the evidence leaves listed below that ARE this habit in action (a page \
 published, a run scheduled); the habit becomes their second parent and the project keeps \
-them. Leave out leaves that are about the project rather than the way of acting.\n\
+them. Leave out leaves that are about the project rather than the way of acting. \
+adopt_distillants names the recurring distillants listed below that ARE the means this habit \
+runs on — the tool, service, channel or place (a hosting service, a mail tool, a wallet) — so \
+opening the habit shows how it is done; the habit becomes their second parent and their own \
+place stays. Leave out a project that merely happened to use the means, and anything that is \
+a person.\n\
 \n\
 When an existing habit distillant is shown, keep its id: you are refreshing its line and \
 routing from the new count, not minting a twin. When the existing habits listed already \
@@ -269,9 +279,10 @@ fn rule_schema() -> Value {
             "line": {"type": "string", "description": "one sentence about the person in the tense the tally supports; empty when not habit"},
             "routing": {"type": "array", "items": {"type": "string"}, "description": "the recall vocabulary for this habit, 5 to 12 terms (replaces the current set): the nouns and verbs a request for this behaviour would carry and a request for anything else would not"},
             "adopt_leaves": {"type": "array", "items": {"type": "string"}, "description": "ids of the listed evidence leaves that are this habit in action"},
+            "adopt_distillants": {"type": "array", "items": {"type": "string"}, "description": "ids of the listed recurring distillants that are the means this habit runs on (the tool, service, channel, place); empty when the habit runs on nothing in particular"},
             "reason": {"type": "string", "description": "one line: why this verdict"}
         },
-        "required": ["verdict", "id", "label", "line", "routing", "adopt_leaves", "reason"],
+        "required": ["verdict", "id", "label", "line", "routing", "adopt_leaves", "adopt_distillants", "reason"],
         "additionalProperties": false
     })
 }
@@ -289,6 +300,8 @@ struct Ruled {
     routing: Vec<String>,
     #[serde(default)]
     adopt_leaves: Vec<String>,
+    #[serde(default)]
+    adopt_distillants: Vec<String>,
     #[serde(default)]
     reason: String,
 }
@@ -462,6 +475,24 @@ fn rule_body(graph: &Graph, action: &str, phase: Phase, now: u64) -> String {
             l.text
         );
     }
+    let all_events: Vec<&crate::model::Episode> = graph.episodes.iter().filter(|e| carries(e, &actions)).collect();
+    let means = means_of(graph, &all_events, habit_id.as_deref());
+    body.push_str("\nDistillants recurring under these events (the means or the setting the action runs on; adopt the ones that ARE the means):\n");
+    if means.is_empty() {
+        body.push_str("(none recurs)\n");
+    }
+    for (m, n) in &means {
+        let adopted = habit_id.as_ref().is_some_and(|h| m.parents.contains(h));
+        let _ = writeln!(
+            body,
+            "- {} ({n} of {} events){} — {} — {}",
+            m.id,
+            all_events.len(),
+            if adopted { " [already under this habit]" } else { "" },
+            m.label,
+            clipped(&m.headline())
+        );
+    }
     let mut habits: Vec<&Distillant> =
         graph.distillants.values().filter(|m| m.tally.is_some() && Some(&m.id) != habit_id.as_ref()).collect();
     habits.sort_by(|a, b| a.id.cmp(&b.id));
@@ -473,6 +504,37 @@ fn rule_body(graph: &Graph, action: &str, phase: Phase, now: u64) -> String {
         }
     }
     body
+}
+
+pub fn adoptable_means(graph: &Graph, id: &str, habit_id: Option<&str>) -> bool {
+    let Some(m) = graph.distillants.get(id) else { return false };
+    let standing = crate::model::is_standing_crown(id);
+    let a_habit = m.tally.is_some() || is_habit_id(id);
+    let person = id.starts_with("people/") || m.parents.iter().any(|p| p == "people");
+    let itself = habit_id == Some(id);
+    m.tree == Tree::Registry && !standing && !a_habit && !person && !itself
+}
+
+fn means_of<'g>(graph: &'g Graph, events: &[&crate::model::Episode], habit_id: Option<&str>) -> Vec<(&'g Distillant, usize)> {
+    let mut counts: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for e in events {
+        let mut seen: Vec<&str> = Vec::new();
+        for t in &e.tags {
+            if !seen.contains(&t.as_str()) {
+                seen.push(t);
+                *counts.entry(t).or_default() += 1;
+            }
+        }
+    }
+    let mut out: Vec<(&Distillant, usize)> = counts
+        .into_iter()
+        .filter(|(_, n)| *n >= MEANS_MIN_EVENTS)
+        .filter(|(id, _)| adoptable_means(graph, id, habit_id))
+        .filter_map(|(id, n)| graph.distillants.get(id).map(|m| (m, n)))
+        .collect();
+    out.sort_by(|(a, n), (b, k)| k.cmp(n).then_with(|| a.id.cmp(&b.id)));
+    out.truncate(PROMPT_MEANS);
+    out
 }
 
 pub fn render_prompt(graph: &Graph, step: &PatternStep, now: u64) -> Option<String> {
@@ -600,6 +662,20 @@ fn apply_ruling(graph: &mut Graph, action: &str, phase: Phase, raw: &str, now: u
     for leaf in &out.adopt_leaves {
         ops.push(Op::Adopt { leaf: leaf.clone(), parent: id.clone() });
     }
+    for means in &out.adopt_distillants {
+        let means = means.trim();
+        if !adoptable_means(graph, means, Some(&id)) {
+            traces.push(format!("✋ {id} cannot take {means} as its means (not a registry node it may hold)"));
+            continue;
+        }
+        let Some(m) = graph.distillants.get(means) else { continue };
+        if m.parents.iter().any(|p| p == &id) {
+            continue;
+        }
+        let mut parents = m.parents.clone();
+        parents.push(id.clone());
+        ops.push(Op::Reparent { distillant: means.to_string(), parents });
+    }
     traces.extend(harvest::apply_ops(graph, ops, now).traces);
     if let (Some(before), Some(m)) = (line_before, graph.distillants.get(&id))
         && before != m.line
@@ -678,7 +754,9 @@ pub fn fold_habit(graph: &mut Graph, id: &str, now: u64) -> Vec<String> {
     for cid in child_ids {
         let Some(child) = graph.distillants.get(&cid) else { continue };
         let mut parents: Vec<Id> = child.parents.iter().filter(|p| *p != id).cloned().collect();
-        parents.extend(homes.iter().cloned());
+        if parents.is_empty() {
+            parents.extend(homes.iter().cloned());
+        }
         let parents = graph.antichain(parents);
         if let Some(child) = graph.distillants.get_mut(&cid) {
             child.parents = parents;
@@ -837,6 +915,49 @@ mod tests {
             "adopt_leaves": adopt, "reason": "spans projects"
         })
         .to_string()
+    }
+
+    #[test]
+    fn the_means_the_action_runs_on_is_shown_and_a_habit_can_take_it_under_itself() {
+        let mut g = graph_with_marks("published-page", &[1, 4, 8, 12, 16, 20], 3);
+        let mut host = Distillant::bare("work/stacktree-hosting", Tree::Registry, "Stacktree hosting", vec!["work".into()], vec!["stacktree".into()]);
+        host.line = "Uses Stacktree as a cheap static-page host.".into();
+        host.line_changed_at = NOW;
+        g.distillants.insert(host.id.clone(), host);
+        g.distillants.insert("people/jonathan".into(), Distillant::bare("people/jonathan", Tree::Registry, "Jonathan", vec!["people".into()], vec![]));
+        for e in g.episodes.iter_mut().take(4) {
+            e.tags.push("work/stacktree-hosting".into());
+            e.tags.push("people/jonathan".into());
+            e.tags.push("money".into());
+        }
+        let prompt = render_prompt(&g, &due(&g, NOW).unwrap(), NOW).unwrap();
+        assert!(prompt.contains("- work/stacktree-hosting (4 of 6 events) — Stacktree hosting — Uses Stacktree as a cheap static-page host."), "{prompt}");
+        assert!(!prompt.contains("- people/jonathan (4 of 6"), "a person is never the means: {prompt}");
+        assert!(!prompt.contains("- money (4 of 6"), "a crown is never the means: {prompt}");
+        assert!(prompt.contains("- work/p0 (2 of 6 events)"), "a project used twice is listed, the model decides: {prompt}");
+        let raw = json!({
+            "verdict": "habit", "id": "habits/publishes-pages", "label": "Publishes pages",
+            "line": "Publishes a Stacktree page for almost anything he makes.",
+            "routing": ["website", "site", "page", "publish", "stacktree", "stacktr.ee"],
+            "adopt_leaves": [], "adopt_distillants": ["work/stacktree-hosting", "people/jonathan", "money", "work/nope"],
+            "reason": "the means recurs"
+        })
+        .to_string();
+        let traces = apply(&mut g, &PatternStep::Rule { action: "published-page".into(), phase: Phase::Mint }, &raw, NOW).unwrap();
+        assert!(traces.iter().any(|t| t == "→ reparented work/stacktree-hosting under work+habits/publishes-pages"), "{traces:?}");
+        assert!(traces.iter().any(|t| t.starts_with("✋ habits/publishes-pages cannot take people/jonathan")), "{traces:?}");
+        assert!(traces.iter().any(|t| t.starts_with("✋ habits/publishes-pages cannot take money")), "{traces:?}");
+        assert!(traces.iter().any(|t| t.starts_with("✋ habits/publishes-pages cannot take work/nope")), "{traces:?}");
+        let host = &g.distillants["work/stacktree-hosting"];
+        assert_eq!(host.parents, vec!["work".to_string(), "habits/publishes-pages".to_string()], "its own place stays");
+        assert!(g.distillants["habits/publishes-pages"].routing.iter().any(|r| r == "stacktr.ee"), "the means' name routes to the habit");
+        let open = crate::projection::render_open(&g, "habits/publishes-pages", NOW);
+        assert!(open.contains("- work/stacktree-hosting — Uses Stacktree as a cheap static-page host."), "opening the habit shows how it is done: {open}");
+        let refreshed = render_prompt(&g, &PatternStep::Rule { action: "published-page".into(), phase: Phase::Refresh }, NOW).unwrap();
+        assert!(refreshed.contains("- work/stacktree-hosting (4 of 6 events) [already under this habit]"), "{refreshed}");
+        let traces = fold_habit(&mut g, "habits/publishes-pages", NOW + 100 * DAY);
+        assert!(traces[0].starts_with("⌛ folded habit"), "{traces:?}");
+        assert_eq!(g.distillants["work/stacktree-hosting"].parents, vec!["work".to_string()], "a fold hands the means back to its own place only");
     }
 
     #[test]

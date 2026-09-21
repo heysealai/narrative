@@ -279,9 +279,11 @@ host was a neobank agent).
   its live evidence touches; a cluster is a candidate at five marks, three distillants and
   two weeks (one distillant is a project, one day is a burst) — and the model only rules on
   one candidate at a time: **habit** (mint or refresh a `habits/*` distillant whose line is
-  in the tense the count supports and whose routing is the plain words a request for that
-  behaviour would carry; the evidence leaves are *adopted*, a second parent beside their
-  project), **project**, or **noise**. A ruling that minted nothing is remembered with its
+  in the tense the count supports, names the means the events run on when one recurs under
+  them — a hosting service, a mail tool, a wallet — and whose routing is the plain words a
+  request for that behaviour would carry, the means' name included; the evidence leaves are
+  *adopted*, a second parent beside their project, and so is the means' own distillant, so
+  opening the habit shows how it is done), **project**, or **noise**. A ruling that minted nothing is remembered with its
   count, and the cluster is not re-asked until it has grown by five marks. The harvester is
   shown the top of the ledger every turn (the **action tally**), so its spellings converge
   and new evidence of a standing habit files under it.
