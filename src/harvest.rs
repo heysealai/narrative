@@ -1225,6 +1225,8 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                 forgotten_at: 0,
                 tally: None,
                 rhythm: None,
+                grouped_at: 0,
+                regrouped_children: 0,
             });
             let rewritten = existed && !line.is_empty();
             if existed {
@@ -2730,6 +2732,8 @@ mod tests {
                 forgotten_at: 0,
                 tally: None,
                 rhythm: None,
+                grouped_at: 0,
+                regrouped_children: 0,
             },
         );
         g

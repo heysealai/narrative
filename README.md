@@ -115,7 +115,13 @@ one elsewhere in the tree, which the pass is shown so a duplicate branch is a
 choice it can make. Parent sets are antichains: a node never lists an ancestor
 beside that ancestor's own descendant. A due
 child consolidates before its due parent, and an identical rewrite stamps
-nothing — cascades die where the summary absorbed the churn. Between the
+nothing — cascades die where the summary absorbed the churn. Width has the
+same capacity as fatness: a node with more children than the leaf bound is
+**regrouped** — the model names intermediate groups by what the children are
+to this person, and each becomes a child that takes its members. The pinned
+map shows names, not content (id, label, leaf count; the line is one open
+away), a fold-made group renders closed with its member count, and siblings
+list by liveness. Between the
 redistill and the stream sits the **pattern pass**, the one step that reads
 across the whole graph: every episode carries the *actions* the user took in
 it, the digests keep the marks of what they folded, and the pass counts each
@@ -203,6 +209,8 @@ narrative pattern-prompt             # the due pattern step: tag untagged episod
 narrative pattern <json|@file|->     # apply the response (a fold or the rhythms recount takes none)
 narrative habits                     # the standing habits with their counts
 narrative timezone Asia/Tokyo        # the user's zone: rhythms count in it, the harvester's dates read in it
+narrative regroup-prompt <distillant>        # the regroup input for one over-wide node
+narrative regroup <distillant> <json|@file|-> # apply it: fold the children into the groups named
 narrative redistill-prompt <distillant>      # that distillant's full contract
 narrative redistill <distillant> @out.json   # apply the redistill response
 narrative open <distillant|rules> | rules | profile | map | stream | stats | forget <id>
@@ -234,7 +242,7 @@ minted: [docs/harvest-scope-replay.md](docs/harvest-scope-replay.md).
 | `clock.rs` | zone-aware helpers: the now stamp a prompt shows, the dates the harvester answers with |
 | `belief.rs` | belief & salience arithmetic, EMA axis nudges, supersession |
 | `routing.rs` | routing table + lexical matching (read hot path) |
-| `projection.rs` | per-turn recall, pinned rules/profile, skeleton and open rendering |
+| `projection.rs` | per-turn recall, pinned rules/profile, the names-only map and open rendering |
 | `harvest.rs` | post-turn harvester: structured-output ops + application, instruction resolution |
 | `consolidate.rs` | redistill (descent step: rewrite line + split/merge), pressure + drift trigger, residual stats |
 | `agent.rs` | system prompt assembly, open_memory tool loop |
