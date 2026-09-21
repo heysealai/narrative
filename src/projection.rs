@@ -397,30 +397,52 @@ fn render_leaf_pinned(out: &mut String, graph: &Graph, leaf_id: &str) {
     }
 }
 
-fn walk_tree(out: &mut String, graph: &Graph, distillant_id: &str, depth: usize, with_leaves: bool) {
+fn walk_profile(out: &mut String, graph: &Graph, distillant_id: &str, depth: usize) {
     let Some(m) = graph.distillants.get(distillant_id) else { return };
     let indent = "  ".repeat(depth);
-    let n_leaves = graph.leaves_under(distillant_id).len();
-    let _ = write!(out, "{indent}- {} — {}{}", m.id, m.headline(), m.tally_note(None));
-    if !with_leaves && n_leaves > 0 {
-        let _ = write!(out, " [{n_leaves} leaves]");
-    }
-    out.push('\n');
-    if with_leaves {
-        let mut leaves = graph.leaves_under(distillant_id);
-        leaves.sort_by(|a, b| a.id.cmp(&b.id));
-        for l in leaves {
-            let mut line = String::new();
-            render_leaf_pinned(&mut line, graph, &l.id);
-            for ln in line.lines() {
-                let _ = writeln!(out, "{indent}  {ln}");
-            }
+    let _ = writeln!(out, "{indent}- {} — {}{}", m.id, m.headline(), m.tally_note(None));
+    let mut leaves = graph.leaves_under(distillant_id);
+    leaves.sort_by(|a, b| a.id.cmp(&b.id));
+    for l in leaves {
+        let mut line = String::new();
+        render_leaf_pinned(&mut line, graph, &l.id);
+        for ln in line.lines() {
+            let _ = writeln!(out, "{indent}  {ln}");
         }
     }
     let mut children = graph.child_distillants(distillant_id);
     children.sort_by(|a, b| a.id.cmp(&b.id));
     for c in children {
-        walk_tree(out, graph, &c.id, depth + 1, with_leaves);
+        walk_profile(out, graph, &c.id, depth + 1);
+    }
+}
+
+fn walk_map(out: &mut String, graph: &Graph, m: &crate::model::Distillant, depth: usize) {
+    let indent = "  ".repeat(depth);
+    let n_leaves = graph.leaves_under(&m.id).len();
+    let mut children = graph.child_distillants(&m.id);
+    let closed = m.grouped_at > 0;
+    let nothing_under = children.is_empty() && n_leaves == 0;
+    let name = match nothing_under {
+        true => m.headline(),
+        false => m.label.clone(),
+    };
+    let _ = write!(out, "{indent}- {} — {name}{}", m.id, m.tally_note(None));
+    if n_leaves > 0 {
+        let _ = write!(out, " [{n_leaves} leaves]");
+    }
+    if closed && !children.is_empty() {
+        let _ = write!(out, " ({} inside)", children.len());
+    }
+    out.push('\n');
+    if closed {
+        return;
+    }
+    children.sort_by(|a, b| {
+        crate::model::Liveness::order(&graph.liveness(&a.id), &graph.liveness(&b.id)).then_with(|| a.id.cmp(&b.id))
+    });
+    for c in children {
+        walk_map(out, graph, c, depth + 1);
     }
 }
 
@@ -432,7 +454,7 @@ pub fn render_profile(graph: &Graph) -> String {
     let mut roots = graph.roots(Tree::Profile);
     roots.sort_by(|a, b| a.id.cmp(&b.id));
     for r in roots {
-        walk_tree(&mut out, graph, &r.id, 0, true);
+        walk_profile(&mut out, graph, &r.id, 0);
     }
     out
 }
@@ -444,8 +466,11 @@ pub fn render_registry_skeleton(graph: &Graph) -> String {
     let mut out = String::new();
     let mut roots = graph.roots(Tree::Registry);
     roots.sort_by(|a, b| a.id.cmp(&b.id));
+    roots.sort_by(|a, b| {
+        crate::model::Liveness::order(&graph.liveness(&a.id), &graph.liveness(&b.id)).then_with(|| a.id.cmp(&b.id))
+    });
     for r in roots {
-        walk_tree(&mut out, graph, &r.id, 0, false);
+        walk_map(&mut out, graph, r, 0);
     }
     out
 }
@@ -492,9 +517,13 @@ pub fn render_open(graph: &Graph, distillant_id: &str, now: u64) -> String {
     if !children.is_empty() {
         out.push_str("Child distillants:\n");
         for c in children {
+            let inside = match c.grouped_at > 0 {
+                true => format!(" ({} inside)", graph.child_distillants(&c.id).len()),
+                false => String::new(),
+            };
             let _ = writeln!(
                 out,
-                "- {} — {}{} [{} leaves]",
+                "- {} — {}{} [{} leaves]{inside}",
                 c.id,
                 c.headline(),
                 c.tally_note(Some(now)),
@@ -509,6 +538,50 @@ pub fn render_open(graph: &Graph, distillant_id: &str, now: u64) -> String {
 mod tests {
     use super::*;
     use crate::model::{Distillant, Graph, Leaf, Supersession, Tree, PROFILE_APEX};
+
+    #[test]
+    fn the_map_shows_names_and_counts_closes_fold_made_groups_and_lists_the_live_first() {
+        let mut g = Graph::seed();
+        let day = 86_400;
+        let node = |id: &str, label: &str, line: &str, parent: &str, changed: u64| {
+            let mut m = Distillant::bare(id, Tree::Registry, label, vec![parent.into()], vec![]);
+            m.line = line.into();
+            m.line_changed_at = changed;
+            m
+        };
+        g.distillants.insert("work/old".into(), node("work/old", "Old client", "A client from years back, long quiet.", "work", 10 * day));
+        g.distillants.insert("work/hot".into(), node("work/hot", "Hot client", "The client whose invoice is due Friday.", "work", 90 * day));
+        let mut group = node("work/clients", "Clients", "Agencies and one-off clients the freelance work comes from.", "work", 95 * day);
+        group.grouped_at = 95 * day;
+        g.distillants.insert("work/clients".into(), group);
+        for id in ["work/old", "work/hot"] {
+            g.distillants.get_mut(id).unwrap().parents = vec!["work/clients".into()];
+        }
+        g.distillants.insert("work/studio".into(), node("work/studio", "Studio", "The shared East Austin studio.", "work", 50 * day));
+        g.distillants.insert("work/side".into(), node("work/side", "Side project", "", "work", 0));
+        let leaf = |id: &str, parent: &str, at: u64| Leaf::state(id.into(), format!("fact {id}"), vec![parent.into()], 0.5, at);
+        g.leaves.insert("l1".into(), leaf("l1", "work/hot", 91 * day));
+        g.leaves.insert("l2".into(), leaf("l2", "work/studio", 60 * day));
+        g.leaves.insert("l3".into(), leaf("l3", "work/studio", 61 * day));
+        let map = render_registry_skeleton(&g);
+        assert!(map.contains("- work — Work\n"), "a node with things under it shows its label, not its line: {map}");
+        assert!(map.contains("  - work/clients — Clients (2 inside)\n"), "a fold-made group renders closed with its member count: {map}");
+        assert!(!map.contains("work/hot") && !map.contains("work/old"), "members of a closed group stay out of the map: {map}");
+        assert!(map.contains("  - work/studio — Studio [2 leaves]\n"), "{map}");
+        assert!(map.contains("  - work/side — Side project (no line yet)\n"), "a node with nothing under it shows its headline: {map}");
+        assert!(map.contains("- rhythms — Rhythms (no line yet)\n"), "{map}");
+        let clients = map.find("work/clients").unwrap();
+        let studio = map.find("work/studio").unwrap();
+        let side = map.find("work/side").unwrap();
+        assert!(clients < studio && studio < side, "live branches first, the bare stub last: {map}");
+        let work = map.find("- work — Work").unwrap();
+        let people = map.find("- people — People").unwrap();
+        assert!(work < people, "the crown with material lists before an empty one: {map}");
+        let open = render_open(&g, "work", 100 * day);
+        assert!(open.contains("- work/clients — Agencies and one-off clients the freelance work comes from. [0 leaves] (2 inside)"), "open shows the line and what a group holds: {open}");
+        let inside = render_open(&g, "work/clients", 100 * day);
+        assert!(inside.contains("- work/hot — The client whose invoice is due Friday. [1 leaves]"), "opening the group lists its members with their lines: {inside}");
+    }
 
     fn fixture() -> Graph {
         let mut g = Graph::seed();
@@ -527,6 +600,8 @@ mod tests {
                 forgotten_at: 0,
                 tally: None,
                 rhythm: None,
+                grouped_at: 0,
+                regrouped_children: 0,
             },
         );
         for i in 0..8 {
@@ -558,7 +633,7 @@ mod tests {
         let l = Leaf::state("poker-page".into(), "The poker page is live.".into(), vec!["work".into(), "habits/publishes-pages".into()], 0.5, 90 * day);
         g.leaves.insert(l.id.clone(), l);
         let map = render_registry_skeleton(&g);
-        assert!(map.contains("- habits/publishes-pages — Publishes a page for almost anything. (×17, 6 in the last 30 days) [1 leaves]"), "{map}");
+        assert!(map.contains("- habits/publishes-pages — Publishes pages (×17, 6 in the last 30 days) [1 leaves]"), "the map shows the name and the count, the line is one open away: {map}");
         let open = render_open(&g, "habits/publishes-pages", 100 * day);
         assert!(open.starts_with("# habits/publishes-pages — Publishes a page for almost anything. (×17, last 3d ago)"), "{open}");
         let p = project(&g, "make me a website", 100 * day);
@@ -620,6 +695,8 @@ mod tests {
                     forgotten_at: 0,
                     tally: None,
                     rhythm: None,
+                    grouped_at: 0,
+                    regrouped_children: 0,
                 },
             );
             let l = Leaf::state(
@@ -709,6 +786,8 @@ mod tests {
                     forgotten_at: 0,
                     tally: None,
                     rhythm: None,
+                    grouped_at: 0,
+                    regrouped_children: 0,
                 },
             );
             for i in 0..5 {

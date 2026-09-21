@@ -24,6 +24,11 @@ narrative — structured long-term memory engine
                                   print the redistill input for one distillant
   narrative redistill <distillant-id> <json|@file|->
                                   apply a redistill response to that distillant
+  narrative regroup-prompt <distillant-id>
+                                  print the regroup input for one over-wide node
+  narrative regroup <distillant-id> <json|@file|->
+                                  apply a regroup response: fold its children
+                                  into the groups named
   narrative pattern-prompt        print the input for the due pattern step (tag
                                   untagged episodes, or rule on a repeated action)
   narrative pattern [json|@file|-]
@@ -53,6 +58,9 @@ sets the clock every pass and render reads, for driving a graph at a chosen time
 /// a pass is due so it can run one (redistill-prompt / digest-prompt, then
 /// apply the response).
 fn print_due_hints(graph: &narrative::model::Graph, now: u64) {
+    if let Some(id) = consolidate::regroup_due(graph) {
+        println!("⚙ regroup due: {id} ({} children, capacity {})", consolidate::fan_out(graph, &id), consolidate::FAN_OUT_CAPACITY);
+    }
     if let Some(id) = consolidate::due(graph) {
         println!("⚙ consolidation due: {id} (pressure {})", consolidate::pressure(graph, &id));
     }
@@ -156,6 +164,24 @@ fn main() -> Result<()> {
             }
             let text = text_arg(rest.first().copied().unwrap_or("-"))?;
             for t in consolidate::apply_digest(&mut graph, text, take, now)? {
+                println!("✎ {t}");
+            }
+            print_due_hints(&graph, now);
+            store::save(&data_file, &graph)?;
+        }
+        "regroup-prompt" => {
+            let id = args.get(1).map(String::as_str).unwrap_or("");
+            match consolidate::render_regroup_prompt(&graph, id) {
+                Some(p) => print!("{p}"),
+                None => bail!("no distillant \"{id}\""),
+            }
+        }
+        "regroup" => {
+            let Some(id) = args.get(1).map(String::as_str) else {
+                bail!("usage: narrative regroup <distillant-id> <json|@file|->");
+            };
+            let raw = text_arg(args.get(2).map(String::as_str).unwrap_or("-"))?;
+            for t in consolidate::apply_regroup(&mut graph, id, &raw, now)? {
                 println!("✎ {t}");
             }
             print_due_hints(&graph, now);
