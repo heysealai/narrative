@@ -1,11 +1,14 @@
 pub mod agent;
 pub mod belief;
+pub mod clock;
 pub mod consolidate;
 pub mod harvest;
 pub mod llm;
 pub mod model;
+pub mod pattern;
 pub mod projection;
 pub mod replay;
+pub mod rhythm;
 pub mod routing;
 pub mod sim;
 pub mod store;

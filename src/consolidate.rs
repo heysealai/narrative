@@ -19,6 +19,7 @@ use crate::model::{
     age_str, Graph, Id, Tree, COMPRESS_BATCH, DIGEST_MIN_CUT, DIGEST_WINDOW, MECH_DIGEST_PREFIX, PROFILE_APEX,
     STREAM_CAP,
 };
+use crate::pattern;
 
 const REDISTILL_SYSTEM: &str = "You maintain one distillant of a personal memory tree. \
 A distillant's line is its behavioral median: one line that summarizes what the \
@@ -158,7 +159,7 @@ struct MergeSpec {
 /// The redistill input: the distillant's current line and routing, its leaves,
 /// recent episodes tagged here, and its children. None when the distillant
 /// does not exist.
-fn redistill_body(graph: &Graph, distillant_id: &str) -> Option<String> {
+fn redistill_body(graph: &Graph, distillant_id: &str, now: u64) -> Option<String> {
     let m = graph.distillants.get(distillant_id)?;
     let current_line = if m.is_bare() {
         "(none — created bare; write its first line, or merge it away)".to_string()
@@ -179,6 +180,14 @@ fn redistill_body(graph: &Graph, distillant_id: &str) -> Option<String> {
              One dense line of character, not a list of the axes. Where the axes pull against each \
              other (tight with themselves, open-handed with others), the tension is the character: \
              state it, never average it away.\n",
+        );
+    }
+    if let Some(t) = &m.tally {
+        let _ = writeln!(
+            body,
+            "This is a habit the pattern pass counted: {}. Write the line in the tense the count supports — present while it still happens, past when it stopped{}.",
+            pattern::tally_words(t, now),
+            if t.faded { " (it has: keep the past tense)" } else { "" }
         );
     }
     body.push_str("\nLeaves:\n");
@@ -248,8 +257,8 @@ fn same_named_elsewhere<'g>(graph: &'g Graph, distillant_id: &str) -> Vec<&'g cr
 /// The keyless prompt: system contract, the exact output schema, and one
 /// distillant's input — self-contained; a driver holding only this render
 /// can play the consolidation role.
-pub fn render_redistill_prompt(graph: &Graph, distillant_id: &str) -> Option<String> {
-    let body = redistill_body(graph, distillant_id)?;
+pub fn render_redistill_prompt(graph: &Graph, distillant_id: &str, now: u64) -> Option<String> {
+    let body = redistill_body(graph, distillant_id, now)?;
     Some(format!(
         "# System\n{REDISTILL_SYSTEM}\n\n# Output schema (reply with one JSON object matching it)\n{}\n\n# Input\n{body}",
         serde_json::to_string_pretty(&redistill_schema()).expect("static schema serializes")
@@ -374,7 +383,7 @@ fn apply_redistilled_in_place(
 /// One model-driven descent step on a distillant: render its input, ask for
 /// the redistill, apply it.
 pub fn redistill(llm: &dyn Llm, graph: &mut Graph, distillant_id: &str, now: u64) -> Result<Vec<String>> {
-    let Some(body) = redistill_body(graph, distillant_id) else {
+    let Some(body) = redistill_body(graph, distillant_id, now) else {
         return Ok(vec![format!("no distillant {distillant_id}")]);
     };
     let req = ChatRequest {
@@ -493,16 +502,14 @@ pub fn due(graph: &Graph) -> Option<String> {
     Some(cur)
 }
 
-/// One automatic consolidation step, run after each harvest. Distillant
-/// pressure first (it shapes recall); otherwise one stream step — the
-/// stream's hard cap backstops a starved queue. One step per turn bounds
-/// the cost — the sim-side stand-in for the host's eviction-watermark
-/// coupling.
 pub fn auto_step(llm: &dyn Llm, graph: &mut Graph, now: u64) -> Result<Vec<String>> {
     if let Some(id) = due(graph) {
         let mut traces = vec![format!("⚙ consolidating {} (pressure {})", id, pressure(graph, &id))];
         traces.extend(redistill(llm, graph, &id, now)?);
         return Ok(traces);
+    }
+    if pattern::due(graph, now).is_some() {
+        return pattern::step(llm, graph, now);
     }
     distill_stream(llm, graph, now)
 }
@@ -680,7 +687,7 @@ pub fn render_digest_prompt(graph: &Graph, step: &StreamStep, now: u64) -> Strin
 }
 
 /// Residual report: where is consolidation pressure building?
-pub fn stats(graph: &Graph) -> String {
+pub fn stats(graph: &Graph, now: u64) -> String {
     let mut out = String::new();
     let n_reg = graph.distillants.values().filter(|m| m.tree == Tree::Registry).count();
     let n_prof = graph.distillants.values().filter(|m| m.tree == Tree::Profile).count();
@@ -760,6 +767,26 @@ pub fn stats(graph: &Graph) -> String {
     if !orphans.is_empty() {
         let _ = writeln!(out, "orphan leaves (no surviving parent): {}", orphans.join(", "));
     }
+    let habits: Vec<&crate::model::Distillant> = graph.distillants.values().filter(|m| m.tally.is_some()).collect();
+    let marks: usize = graph.ledger().values().map(Vec::len).sum();
+    let untagged = graph.episodes.iter().filter(|e| e.awaits_actions()).count();
+    let _ = writeln!(
+        out,
+        "habits: {} standing · action marks: {marks} · untagged episodes: {untagged} · declined clusters: {}",
+        habits.len(),
+        graph.patterns.verdicts.len()
+    );
+    let rhythm = graph.distillants.get(crate::model::RHYTHMS).and_then(|m| m.rhythm.as_ref());
+    let _ = writeln!(
+        out,
+        "rhythms: {} activity marks · zone {} · {}",
+        graph.activity().len(),
+        graph.timezone.as_deref().unwrap_or("unknown"),
+        match rhythm {
+            Some(r) => format!("counted {} ({} marks)", crate::model::age_str(now, r.computed_at), r.n),
+            None => "not counted yet".to_string(),
+        }
+    );
     match due(graph) {
         Some(id) => {
             let _ = writeln!(
@@ -768,16 +795,21 @@ pub fn stats(graph: &Graph) -> String {
                 pressure(graph, &id)
             );
         }
-        None => match stream_due(graph) {
+        None => match pattern::due(graph, now) {
             Some(step) => {
-                let _ = writeln!(out, "next auto pass: {}", step.describe(graph));
+                let _ = writeln!(out, "next auto pass: {}", step.describe());
             }
-            None => {
-                let _ = writeln!(
-                    out,
-                    "next auto pass: none due (fires at pressure ≥ {PRESSURE_TRIGGER} with new material)"
-                );
-            }
+            None => match stream_due(graph) {
+                Some(step) => {
+                    let _ = writeln!(out, "next auto pass: {}", step.describe(graph));
+                }
+                None => {
+                    let _ = writeln!(
+                        out,
+                        "next auto pass: none due (fires at pressure ≥ {PRESSURE_TRIGGER} with new material)"
+                    );
+                }
+            },
         },
     }
     out
@@ -815,12 +847,12 @@ mod tests {
         let l = Leaf::state("rent-amount".into(), "Rent is $2,200.".into(), vec!["money".into()], 0.5, 1_000);
         g.leaves.insert(l.id.clone(), l);
 
-        let p = render_redistill_prompt(&g, "money").unwrap();
+        let p = render_redistill_prompt(&g, "money", 2_000).unwrap();
         assert!(p.starts_with("# System\n"), "self-contained contract: {p}");
         assert!(p.contains("# Output schema"), "schema inline: {p}");
         assert!(p.contains("\"merge_leaves\""), "schema fields present");
         assert!(p.contains("Rent is $2,200."), "leaves rendered: {p}");
-        assert!(render_redistill_prompt(&g, "ghost").is_none());
+        assert!(render_redistill_prompt(&g, "ghost", 2_000).is_none());
 
         let raw = r#"{"line": "Rent dominates.", "routing": ["lease"]}"#;
         let traces = apply_redistilled(&mut g, "money", raw, 2_000).unwrap();
@@ -918,7 +950,7 @@ mod tests {
         let traces = apply_redistilled(&mut g, "money", raw, 2_000).unwrap();
         assert_eq!(g.distillants["money"].routing, vec!["rent", "landlord"], "{traces:?}");
         assert!(traces.iter().any(|t| t.contains("✂ routing money − no. 001, no. 002, metadata")), "{traces:?}");
-        assert!(render_redistill_prompt(&g, "money").unwrap().contains("\"merge_into\""));
+        assert!(render_redistill_prompt(&g, "money", 2_000).unwrap().contains("\"merge_into\""));
     }
 
     #[test]
@@ -940,9 +972,9 @@ mod tests {
         );
         assert_eq!(pressure(&g, "work/x-engagement-report"), BARE_PRESSURE);
         assert_eq!(due(&g).as_deref(), Some("work/x-engagement-report"), "a stub with no line is due on its own");
-        let body = redistill_body(&g, "work/x-engagement-report").unwrap();
+        let body = redistill_body(&g, "work/x-engagement-report", 2_000).unwrap();
         assert!(body.contains("Current line: (none — created bare"), "{body}");
-        assert!(stats(&g).contains("bare distillants (no line yet"), "{}", stats(&g));
+        assert!(stats(&g, 2_000).contains("bare distillants (no line yet"), "{}", stats(&g, 2_000));
 
         let raw = r#"{"line": "Runs the X engagement report for friends.", "routing": ["x report"], "merge_into": ""}"#;
         apply_redistilled(&mut g, "work/x-engagement-report", raw, 2_000).unwrap();
@@ -987,12 +1019,12 @@ mod tests {
             ],
             1_000,
         );
-        let body = redistill_body(&g, "work/x-engagement-report").unwrap();
+        let body = redistill_body(&g, "work/x-engagement-report", 2_000).unwrap();
         assert!(
             body.contains("Same-named distillants elsewhere (merge_into one of these if this is the same thing):\n- life/hacks/x-engagement-report — A hack that scrapes X"),
             "{body}"
         );
-        assert!(!redistill_body(&g, "life/hacks").unwrap().contains("Same-named"), "no namesake, no section");
+        assert!(!redistill_body(&g, "life/hacks", 2_000).unwrap().contains("Same-named"), "no namesake, no section");
 
         let raw = r#"{"line": "ignored", "routing": ["ignored"], "merge_into": "life/hacks/x-engagement-report"}"#;
         let traces = apply_redistilled(&mut g, "work/x-engagement-report", raw, 2_000).unwrap();
@@ -1087,7 +1119,7 @@ mod tests {
         let raw = r#"{"line": "Checks the balance before every spend.", "routing": [], "merge_into": ""}"#;
         apply_redistilled(&mut g, "money-style", raw, 2_000).unwrap();
         assert_eq!(due(&g).as_deref(), Some(PROFILE_APEX), "a written axis is drift on the bare apex");
-        let body = redistill_body(&g, PROFILE_APEX).unwrap();
+        let body = redistill_body(&g, PROFILE_APEX, 2_000).unwrap();
         assert!(body.contains("This is the profile apex"), "{body}");
         assert!(body.contains("- money-style — Checks the balance before every spend."), "the axis lines are the evidence: {body}");
         let raw = r#"{"line": "Careful with every euro of their own.", "routing": [], "merge_into": ""}"#;
@@ -1147,6 +1179,8 @@ mod tests {
                 consolidated_at: at,
                 line_changed_at: 0,
                 forgotten_at: 0,
+                tally: None,
+                rhythm: None,
             },
         );
     }
@@ -1245,11 +1279,27 @@ mod tests {
     #[test]
     fn redistill_prompt_demands_grounding() {
         let g = Graph::seed();
-        let prompt = render_redistill_prompt(&g, "money").unwrap();
+        let prompt = render_redistill_prompt(&g, "money", 2_000).unwrap();
         assert!(
             prompt.contains("a style reference, not a source"),
             "the anchoring guard must stay in the contract"
         );
+    }
+
+    #[test]
+    fn a_habit_redistill_shows_the_count_and_asks_for_its_tense() {
+        use crate::model::{Distillant, Tally};
+        let mut g = Graph::seed();
+        let mut h = Distillant::bare("habits/x", Tree::Registry, "X", vec!["habits".into()], vec![]);
+        h.tally = Some(Tally {
+            actions: vec!["x".into()], n_all: 9, n_30d: 0, n_7d: 0, first_seen: 0, last_seen: 40 * 86_400,
+            distillants: 4, median_gap_secs: 3 * 86_400, computed_at: 100 * 86_400, faded: true,
+        });
+        g.distillants.insert(h.id.clone(), h);
+        let body = redistill_body(&g, "habits/x", 100 * 86_400).unwrap();
+        assert!(body.contains("This is a habit the pattern pass counted: 9 times; first"), "{body}");
+        assert!(body.contains("past when it stopped (it has: keep the past tense)"), "{body}");
+        assert!(!redistill_body(&g, "money", 100 * 86_400).unwrap().contains("pattern pass counted"));
     }
 
     #[test]
@@ -1277,12 +1327,12 @@ mod tests {
     #[test]
     fn stream_fold_distills_oldest_batch_with_model_text() {
         let mut g = written_seed();
-        let first = g.push_episode("sold Xury".into(), vec![], 1, None);
+        let first = g.push_episode_acting("sold Xury".into(), vec![], Some(vec![]), 1, None);
         let mut l = Leaf::state("xury".into(), "Xury sold.".into(), vec!["people".into()], 0.5, 1);
         l.evidence.push(first.clone());
         g.leaves.insert(l.id.clone(), l);
         for i in 0..STREAM_CAP {
-            g.push_episode(format!("e{i}"), vec![], i as u64 + 2, None);
+            g.push_episode_acting(format!("e{i}"), vec![], Some(vec![]), i as u64 + 2, None);
         }
         // Over the soft cap, under the hard one: nothing folded mechanically.
         assert_eq!(g.episodes.len(), STREAM_CAP + 1);
@@ -1304,7 +1354,7 @@ mod tests {
     fn fold_honors_the_model_cut_and_renders_a_numbered_window() {
         let mut g = Graph::seed();
         for i in 0..=STREAM_CAP {
-            g.push_episode(format!("e{i}"), vec![], i as u64 + 1, None);
+            g.push_episode_acting(format!("e{i}"), vec![], Some(vec![]), i as u64 + 1, None);
         }
         let step = stream_due(&g).unwrap();
         let body = digest_body(&g, &step, 9_000);
@@ -1328,7 +1378,7 @@ mod tests {
     fn fold_clamps_the_cut_to_the_window_bounds() {
         let mut g = Graph::seed();
         for i in 0..=STREAM_CAP {
-            g.push_episode(format!("e{i}"), vec![], i as u64 + 1, None);
+            g.push_episode_acting(format!("e{i}"), vec![], Some(vec![]), i as u64 + 1, None);
         }
         let traces = apply_digest(&mut g, "Tiny cut asked.".into(), Some(3), 9_000).unwrap();
         assert!(
@@ -1338,7 +1388,7 @@ mod tests {
 
         let mut g = Graph::seed();
         for i in 0..=STREAM_CAP {
-            g.push_episode(format!("e{i}"), vec![], i as u64 + 1, None);
+            g.push_episode_acting(format!("e{i}"), vec![], Some(vec![]), i as u64 + 1, None);
         }
         let traces = apply_digest(&mut g, "Huge cut asked.".into(), Some(9_999), 9_000).unwrap();
         assert!(
@@ -1350,13 +1400,14 @@ mod tests {
     #[test]
     fn mechanical_digest_polish_rewrites_in_place_and_disarms() {
         let mut g = Graph::seed();
-        g.push_episode(
+        g.push_episode_acting(
             format!("{MECH_DIGEST_PREFIX}3 earlier episodes] a; b; c"),
             vec!["life".into()],
+            Some(vec![]),
             5,
             None,
         );
-        g.push_episode("later event".into(), vec![], 6, None);
+        g.push_episode_acting("later event".into(), vec![], Some(vec![]), 6, None);
         let Some(StreamStep::Polish(id)) = stream_due(&g) else { panic!("polish should be due") };
         let llm = MockLlm::scripted(vec![json!([{
             "type": "text",
@@ -1377,7 +1428,7 @@ mod tests {
         for i in 0..12 {
             leaf_under(&mut g, &format!("l{i}"), "life", 1_000);
         }
-        g.push_episode(format!("{MECH_DIGEST_PREFIX}2 earlier episodes] x; y"), vec![], 5, None);
+        g.push_episode_acting(format!("{MECH_DIGEST_PREFIX}2 earlier episodes] x; y"), vec![], Some(vec![]), 5, None);
         let llm = MockLlm::scripted(vec![json!([{
             "type": "text",
             "text": "{\"line\": \"Island life.\", \"routing\": []}"
@@ -1396,9 +1447,25 @@ mod tests {
     }
 
     #[test]
+    fn the_pattern_pass_runs_after_distillant_pressure_and_before_the_stream() {
+        let mut g = Graph::seed();
+        g.push_episode_acting(format!("{MECH_DIGEST_PREFIX}2 earlier episodes] x; y"), vec![], Some(vec![]), 5, None);
+        g.push_episode("untagged".into(), vec![], 6, None);
+        let llm = MockLlm::default();
+        let traces = auto_step(&llm, &mut g, 2_000).unwrap();
+        assert!(traces[0].contains("pattern pass due: tag 1"), "{traces:?}");
+        assert_eq!(g.episodes[1].actions, Some(Vec::new()));
+        assert!(g.episodes[0].text.starts_with(MECH_DIGEST_PREFIX), "stream untouched while the pass was due");
+        let traces = auto_step(&llm, &mut g, 3_000).unwrap();
+        assert!(traces.iter().any(|t| t.contains("polished")), "{traces:?}");
+        let report = stats(&g, 3_000);
+        assert!(report.contains("habits: 0 standing · action marks: 0 · untagged episodes: 0"), "{report}");
+    }
+
+    #[test]
     fn echoed_mechanical_marker_is_disarmed() {
         let mut g = Graph::seed();
-        g.push_episode(format!("{MECH_DIGEST_PREFIX}2 earlier episodes] x; y"), vec![], 5, None);
+        g.push_episode_acting(format!("{MECH_DIGEST_PREFIX}2 earlier episodes] x; y"), vec![], Some(vec![]), 5, None);
         let traces =
             apply_digest(&mut g, format!("{MECH_DIGEST_PREFIX}still mechanical"), None, 9_000)
                 .unwrap();

@@ -60,6 +60,7 @@ pub struct OpCounts {
     pub aliases: usize,
     pub distills: usize,
     pub moves: usize,
+    pub adopts: usize,
     pub reparents: usize,
     pub merge_leaves: usize,
     pub merge_distillants: usize,
@@ -112,6 +113,7 @@ fn count(ops: &[Op]) -> OpCounts {
             Op::Alias { .. } => c.aliases += 1,
             Op::Distill { .. } => c.distills += 1,
             Op::Move { .. } => c.moves += 1,
+            Op::Adopt { .. } => c.adopts += 1,
             Op::Reparent { .. } => c.reparents += 1,
             Op::MergeLeaf { .. } => c.merge_leaves += 1,
             Op::MergeDistillant { .. } => c.merge_distillants += 1,
@@ -170,8 +172,8 @@ pub fn run(
             usage.add(response.usage);
             stop_reason = response.stop_reason.clone();
             let text = response.text();
-            parsed = harvest::parse_ops(&text)
-                .or_else(|_| harvest::parse_ops(salvage_json(&text)))
+            parsed = harvest::parse_ops(&text, graph.timezone.as_deref())
+                .or_else(|_| harvest::parse_ops(salvage_json(&text), graph.timezone.as_deref()))
                 .ok();
         }
         let parse_failed = parsed.is_none();

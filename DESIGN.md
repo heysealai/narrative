@@ -21,7 +21,9 @@ answer. Confidence-by-cosine is unauditable.
 
 A **distillant-first tree**. The middle layer — the categories — is not a filing system; it
 is made of **distillants**: nodes that *are* the system's learned model of the person ("how
-they handle rent", "what they obsess about", "how they like being spoken to"). Each
+they handle rent", "what they obsess about", "how they like being spoken to", "what they
+reach for whatever the project"). A distillant is a durable participant in the person's
+life — a person, an obligation, a project — or a durable way of acting or wanting. Each
 distillant carries a **line** — one cached sentence of judgment, the behavioral median of
 everything below it — and the routing vocabulary that makes it findable. Leaves are small,
 boring, atomic facts that serve as evidence and detail under those concepts. A mind map:
@@ -40,10 +42,17 @@ This attacks both failure modes structurally:
 ### The taxonomy is learned — gradient descent with a model as the optimizer
 
 Categories cannot be pre-encoded (people differ), but the span of plausible *top-level*
-categories is shallow and quasi-universal (money, work, people, habits, taste...). The
-personal signature lives one or two levels down. So:
+categories is shallow and quasi-universal. The seed crown is exactly that span: `people`,
+`money`, `work`, `life` (places, health, possessions), `habits` (ways of acting that repeat
+across projects), `taste` (how the person wants things to look, read and be arranged) and
+`rhythms` (when the person is around, counted from the clock rather than judged). The
+personal signature lives one or two levels down, and it shows first under `habits` and
+`taste`: what someone reaches for whatever they are doing, and the standard they hold every
+output to, are more of a signature than any one project. So:
 
-- **Near-universal crown, personalized middle, factual leaves.**
+- **Near-universal crown, personalized middle, factual leaves.** A graph written before a
+  crown existed grows it on its next apply (`normalize` seeds what is missing); no
+  migration.
 - The structure is found iteratively. The loss is *explanatory fit*: a fact that lands
   cleanly in an existing distillant is low-residual; facts piling up in "misc", a category
   whose leaves stopped agreeing with its line, two distillants claiming the same facts —
@@ -52,8 +61,11 @@ personal signature lives one or two levels down. So:
 - A distillant is a **behavioral median**: the central tendency of observed behavior. One-off
   facts don't move the structure; repeated patterns do. That's why it stabilizes instead of
   thrashing.
-- The tree grows recursively but stays shallow (~3 levels) because distillation pressure is
-  constitutive, not cosmetic — see "tree health = retrieval health" below.
+- The tree grows recursively; depth is not the enemy, width is. A crown with fifty direct
+  children has a line that is the median of fifty unrelated things, which is no median at
+  all. Distillation pressure — split what is fat, fold what is wide — keeps every node's
+  fan small enough that its line can be one true sentence; see "tree health = retrieval
+  health" below.
 
 ## The three stores, and the rules beside them
 
@@ -256,8 +268,52 @@ host was a neobank agent).
   line on a distillant where nothing ever changes — no event ever fires against it. The
   guard there would be a slow sweep of longest-untouched distillants; deliberately not
   built.)
+- **The pattern pass** (the one step that reads across the whole graph): the harvester sees
+  one turn, the redistill sees one node, the digest sees one period — none of them can see
+  that the person has published a page thirty times under thirty projects. A habit is a
+  count, and the count is the evidence. So every episode carries **actions**: what the
+  user did in it, as verb-shaped tags the harvester writes and a backfill step tags onto
+  episodes from before. The stream is the **ledger**: a digest carries the action marks of
+  everything it folded (action → event times), so a count reaches back past the fold. The
+  pass is mechanical first — count each action, its span, and how many distinct distillants
+  its live evidence touches; a cluster is a candidate at five marks, three distillants and
+  two weeks (one distillant is a project, one day is a burst) — and the model only rules on
+  one candidate at a time: **habit** (mint or refresh a `habits/*` distillant whose line is
+  in the tense the count supports, names the means the events run on when one recurs under
+  them — a hosting service, a mail tool, a wallet — and whose routing is the plain words a
+  request for that behaviour would carry, the means' name included; the evidence leaves are
+  *adopted*, a second parent beside their project, and so is the means' own distillant, so
+  opening the habit shows how it is done), **project**, or **noise**. A ruling that minted nothing is remembered with its
+  count, and the cluster is not re-asked until it has grown by five marks. The harvester is
+  shown the top of the ledger every turn (the **action tally**), so its spellings converge
+  and new evidence of a standing habit files under it.
+- **Recency on habits**: a habit's distillant carries its **tally** (all-time, last 30 days,
+  last 7, first and last seen, the median gap between marks, the distillant spread), recomputed
+  by the pass and rendered beside the line — ageless in the pinned map (`×17, 6 in the last
+  30 days`), with the last mark's age where a clock is at hand. The line is written in the
+  tense the tally supports. A habit idle for three times its usual gap (two weeks at the
+  least) **fades**: the pass has the line rewritten in past tense. A faded habit idle for six
+  gaps (sixty days at the least) **folds**: the past-tense line becomes one stream episode, the adopted leaves
+  keep their project homes, the distillant goes, and the ledger keeps the marks so a return
+  of the behaviour re-mints it with its history. Project and people lines do not decay:
+  nothing counts them.
+- **Rhythms**: when the person is around is a count, not a judgment, so no model writes it.
+  The times the user acted (every episode with an action; a digest keeps the times it
+  folded) are read in the user's zone — the host tells the engine the zone the device
+  reports — and each hour counts once per day it was active, so a burst of marks in one
+  hour is one hour of presence. The pass writes the `rhythms` crown's line mechanically
+  from the densest hour window, the quiet weekdays and the active days of the last thirty
+  (`Around in the evenings, usually 21:00–01:00 JST, quiet on Sundays; active 18 of the
+  last 30 days`), recounts as the count grows or goes stale, and switches to past tense
+  when the person has been away two weeks. No zone, no rhythm.
+- **Dates from the model are anchored**: the harvester's turn heading carries the now
+  stamp (weekday, date, time, zone) and every `occurred_at` it writes is a date string
+  counted back from it, resolved by the runtime in the user's zone. A stamp later than the
+  write it rides on is impossible and is dropped on apply, and again on normalize for
+  stamps stored before this held.
 - **Salience**: importance assigned at write, strengthened on retrieval, decayed with
-  disuse; recall within an opened category ranks by relevance × recency × importance.
+  disuse (a leaf's effective salience halves every 180 idle days); recall within an opened
+  category ranks by relevance × recency × importance.
   Critically, **salience defends exceptions from median-washing**: a pure line would
   absorb "got scammed by X once" into "occasionally makes payment mistakes" — the useless
   version. High-salience outliers are protected from absorption, can hold their leaf, even
@@ -302,6 +358,13 @@ Leaf {
   created_at, updated_at,
 }
 
+Episode {
+  id, at, occurred_at, text, tags: [distillant ids],
+  actions: [verb-shaped tags] | absent,   // what the user did; absent = not yet tagged
+  folded_actions: { action: [event times] },  // a digest's ledger of what it folded
+  folded_at: [write times],                   // a digest's record of when the user acted
+}
+
 Distillant {
   id, label,
   line,                // one line; the cached judgment — keep it fresh or rot returns
@@ -313,9 +376,18 @@ Distillant {
   residual: misc_count,        // gradient accumulator: facts parked here for lack of better
   line_changed_at,       // stamped on MATERIAL line change; parents read it as drift
   forgotten_at,          // stamped when a forget removed something held here; drift reads it
+  tally,                 // a habit's count (all-time / 30d / 7d, first, last, median gap,
+                         // spread, faded) — only on habits/* the pattern pass minted
+  rhythm,                // the presence count (zone, hours × days active, densest window,
+                         // active days of 30) — only on the rhythms crown
   // disagreement is DERIVED, not stored: see §Dynamics — Drift. Child timestamps
   // vs consolidated_at; a pass zeroes it by construction.
 }
+
+Graph.patterns { verdicts: { action: { ruling: project|noise|faded, at, marks } } }
+  // the pattern pass's rulings that minted nothing, so a cluster is re-asked only
+  // once it has grown
+Graph.timezone   // the IANA zone the host last saw the user's device in
 
 RoutingTable: single, spans registry + profile; entries point into either tree.
 ```

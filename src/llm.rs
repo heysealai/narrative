@@ -316,6 +316,24 @@ impl Llm for MockLlm {
                     usage: Usage::default(),
                 });
             }
+            if raw.starts_with("# Action vocabulary so far") {
+                return Ok(ChatResponse {
+                    content: vec![json!({"type": "text", "text": json!({"tags": []}).to_string()})],
+                    stop_reason: "end_turn".to_string(),
+                    usage: Usage::default(),
+                });
+            }
+            if raw.starts_with("# Repeated action:") {
+                let out = json!({
+                    "verdict": "project", "id": "", "label": "", "line": "", "routing": [],
+                    "adopt_leaves": [], "reason": "[mock] no judgment offline"
+                });
+                return Ok(ChatResponse {
+                    content: vec![json!({"type": "text", "text": out.to_string()})],
+                    stop_reason: "end_turn".to_string(),
+                    usage: Usage::default(),
+                });
+            }
             // Harvest prompts end with "# Turn to harvest\nUser: ...".
             let text = raw
                 .rsplit_once("# Turn to harvest")

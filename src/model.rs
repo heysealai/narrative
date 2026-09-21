@@ -67,12 +67,67 @@ pub struct Episode {
     pub text: String,
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actions: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub folded_actions: BTreeMap<String, Vec<u64>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folded_at: Vec<u64>,
 }
 
 impl Episode {
     pub fn event_at(&self) -> u64 {
         self.occurred_at.unwrap_or(self.at)
     }
+
+    pub fn awaits_actions(&self) -> bool {
+        self.actions.is_none() && !self.is_digest()
+    }
+
+    pub fn is_digest(&self) -> bool {
+        self.id.starts_with("ep-digest-")
+    }
+
+    pub fn user_acted(&self) -> bool {
+        !self.is_digest() && self.actions.as_ref().is_some_and(|a| !a.is_empty())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Tally {
+    pub actions: Vec<String>,
+    pub n_all: u32,
+    pub n_30d: u32,
+    pub n_7d: u32,
+    pub first_seen: u64,
+    pub last_seen: u64,
+    pub distillants: u32,
+    pub median_gap_secs: u64,
+    pub computed_at: u64,
+    #[serde(default)]
+    pub faded: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct PatternState {
+    #[serde(default)]
+    pub verdicts: BTreeMap<String, Verdict>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Verdict {
+    pub ruling: Ruling,
+    pub at: u64,
+    pub marks: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Ruling {
+    Project,
+    Trait,
+    Noise,
+    Faded,
 }
 
 /// Belief is derived from countable events — the model classifies relations,
@@ -358,6 +413,25 @@ pub struct Distillant {
     /// reads this like a leaf that moved against its text.
     #[serde(default)]
     pub forgotten_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tally: Option<Tally>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rhythm: Option<Rhythm>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Rhythm {
+    pub timezone: String,
+    pub n: u32,
+    pub first: u64,
+    pub last: u64,
+    pub hours: Vec<u32>,
+    pub days: Vec<u32>,
+    pub window_start: u8,
+    pub window_len: u8,
+    pub active_days_30d: u32,
+    pub sessions_30d: u32,
+    pub computed_at: u64,
 }
 
 impl Distillant {
@@ -400,6 +474,16 @@ impl Distillant {
             consolidated_at: 0,
             line_changed_at: 0,
             forgotten_at: 0,
+            tally: None,
+            rhythm: None,
+        }
+    }
+
+    pub fn tally_note(&self, now: Option<u64>) -> String {
+        let Some(t) = &self.tally else { return String::new() };
+        match now {
+            Some(now) => format!(" (×{}, last {})", t.n_all, age_str(now, t.last_seen)),
+            None => format!(" (×{}, {} in the last 30 days)", t.n_all, t.n_30d),
         }
     }
 }
@@ -412,6 +496,16 @@ pub struct Graph {
     pub distillants: BTreeMap<Id, Distillant>,
     #[serde(default)]
     pub leaves: BTreeMap<Id, Leaf>,
+    #[serde(default, skip_serializing_if = "PatternState::is_empty")]
+    pub patterns: PatternState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
+}
+
+impl PatternState {
+    pub fn is_empty(&self) -> bool {
+        self.verdicts.is_empty()
+    }
 }
 
 /// Soft cap: a stream past this is due for a distilled digest pass —
@@ -442,6 +536,50 @@ pub const MECH_DIGEST_PREFIX: &str = "[digest of ";
 /// profile axis hangs under it, so the pinned tier opens with who this
 /// person is before it lists how they tend.
 pub const PROFILE_APEX: &str = "character";
+pub const HABITS: &str = "habits";
+pub const TASTE: &str = "taste";
+pub const RHYTHMS: &str = "rhythms";
+pub const STAMP_SLACK_SECS: u64 = 86_400;
+
+struct Crown {
+    tree: Tree,
+    id: &'static str,
+    label: &'static str,
+    parents: &'static [&'static str],
+    routing: &'static [&'static str],
+}
+
+impl Crown {
+    fn is_standing(&self) -> bool {
+        self.parents.is_empty()
+    }
+}
+
+const fn crown(tree: Tree, id: &'static str, label: &'static str, parents: &'static [&'static str], routing: &'static [&'static str]) -> Crown {
+    Crown { tree, id, label, parents, routing }
+}
+
+pub fn is_standing_crown(id: &str) -> bool {
+    CROWN.iter().any(|c| c.id == id && c.is_standing())
+}
+
+const CROWN: &[Crown] = &[
+    crown(Tree::Registry, "people", "People", &[],
+     &["friend", "family", "sister", "brother", "mom", "dad", "partner", "wife", "husband", "boss", "landlord"]),
+    crown(Tree::Registry, "money", "Money", &[],
+     &["money", "pay", "paid", "payment", "rent", "bill", "bills", "budget", "salary", "price", "cost", "owe", "bought", "buy"]),
+    crown(Tree::Registry, "work", "Work", &[],
+     &["work", "job", "project", "meeting", "deadline", "office", "client"]),
+    crown(Tree::Registry, "life", "Life", &[],
+     &["home", "health", "gym", "trip", "travel", "hobby", "weekend"]),
+    crown(Tree::Registry, HABITS, "Habits", &[], &["habit", "habits", "routine"]),
+    crown(Tree::Registry, TASTE, "Taste", &[], &["taste", "style", "aesthetic", "design", "look and feel"]),
+    crown(Tree::Registry, RHYTHMS, "Rhythms", &[], &["rhythm", "rhythms", "usually", "mornings", "evenings", "weekends", "weekdays"]),
+    crown(Tree::Profile, PROFILE_APEX, "Character", &[], &[]),
+    crown(Tree::Profile, "communication", "Communication style", &[PROFILE_APEX], &[]),
+    crown(Tree::Profile, "money-style", "Money style", &[PROFILE_APEX], &[]),
+    crown(Tree::Profile, "temperament", "Temperament", &[PROFILE_APEX], &[]),
+];
 
 impl Graph {
     /// The near-universal crown. Personal signature grows in the middle layers;
@@ -452,25 +590,74 @@ impl Graph {
     /// with material under it writes the first line.
     pub fn seed() -> Graph {
         let mut g = Graph::default();
-        let crown = [
-            (Tree::Registry, "people", "People", Vec::new(),
-             vec!["friend", "family", "sister", "brother", "mom", "dad", "partner", "wife", "husband", "boss", "landlord"]),
-            (Tree::Registry, "money", "Money", Vec::new(),
-             vec!["money", "pay", "paid", "payment", "rent", "bill", "bills", "budget", "salary", "price", "cost", "owe", "bought", "buy"]),
-            (Tree::Registry, "work", "Work", Vec::new(),
-             vec!["work", "job", "project", "meeting", "deadline", "office", "client"]),
-            (Tree::Registry, "life", "Life", Vec::new(),
-             vec!["home", "health", "gym", "trip", "travel", "hobby", "weekend"]),
-            (Tree::Profile, PROFILE_APEX, "Character", Vec::new(), vec![]),
-            (Tree::Profile, "communication", "Communication style", vec![PROFILE_APEX], vec![]),
-            (Tree::Profile, "money-style", "Money style", vec![PROFILE_APEX], vec![]),
-            (Tree::Profile, "temperament", "Temperament", vec![PROFILE_APEX], vec![]),
-        ];
-        let owned = |ids: Vec<&str>| ids.into_iter().map(str::to_string).collect();
-        for (tree, id, label, parents, routing) in crown {
-            g.distillants.insert(id.to_string(), Distillant::bare(id, tree, label, owned(parents), owned(routing)));
-        }
+        g.plant(|_| true);
         g
+    }
+
+    pub fn ensure_standing_crowns(&mut self) -> Vec<Id> {
+        self.plant(Crown::is_standing)
+    }
+
+    fn plant(&mut self, wanted: impl Fn(&Crown) -> bool) -> Vec<Id> {
+        let owned = |ids: &[&str]| ids.iter().map(|s| s.to_string()).collect();
+        let mut added = Vec::new();
+        for c in CROWN.iter().filter(|c| wanted(c)) {
+            if self.distillants.contains_key(c.id) {
+                continue;
+            }
+            self.distillants.insert(c.id.to_string(), Distillant::bare(c.id, c.tree, c.label, owned(c.parents), owned(c.routing)));
+            added.push(c.id.to_string());
+        }
+        added
+    }
+
+    pub fn ledger(&self) -> BTreeMap<String, Vec<u64>> {
+        let mut ledger: BTreeMap<String, Vec<u64>> = BTreeMap::new();
+        for e in &self.episodes {
+            for (action, ats) in &e.folded_actions {
+                ledger.entry(action.clone()).or_default().extend(ats.iter().copied());
+            }
+            for action in e.actions.iter().flatten() {
+                ledger.entry(action.clone()).or_default().push(e.event_at());
+            }
+        }
+        for ats in ledger.values_mut() {
+            ats.sort_unstable();
+        }
+        ledger
+    }
+
+    pub fn drop_future_stamps(&mut self) -> u32 {
+        let mut dropped = 0;
+        for e in &mut self.episodes {
+            if e.occurred_at.is_some_and(|o| o > e.at + STAMP_SLACK_SECS) {
+                e.occurred_at = None;
+                dropped += 1;
+            }
+        }
+        for l in self.leaves.values_mut() {
+            if l.occurred_at.is_some_and(|o| o > l.updated_at + STAMP_SLACK_SECS) {
+                l.occurred_at = None;
+                dropped += 1;
+            }
+        }
+        dropped
+    }
+
+    pub fn activity(&self) -> Vec<u64> {
+        let mut at: Vec<u64> = self
+            .episodes
+            .iter()
+            .flat_map(|e| e.folded_at.iter().copied().chain(e.user_acted().then_some(e.at)))
+            .collect();
+        at.sort_unstable();
+        at
+    }
+
+    pub fn habit_of(&self, action: &str) -> Option<&Distillant> {
+        self.distillants
+            .values()
+            .find(|m| m.tally.as_ref().is_some_and(|t| t.actions.iter().any(|a| a == action)))
     }
 
     /// Where a distillant hangs. Its parents become an antichain; in the
@@ -527,13 +714,34 @@ impl Graph {
         at: u64,
         occurred_at: Option<u64>,
     ) -> Id {
+        self.push_episode_acting(text, tags, None, at, occurred_at)
+    }
+
+    pub fn push_episode_acting(
+        &mut self,
+        text: String,
+        tags: Vec<String>,
+        actions: Option<Vec<String>>,
+        at: u64,
+        occurred_at: Option<u64>,
+    ) -> Id {
         let mut n = self.episodes.len() + 1;
         let mut id = format!("ep-{n}");
         while self.episodes.iter().any(|e| e.id == id) {
             n += 1;
             id = format!("ep-{n}");
         }
-        self.episodes.push(Episode { id: id.clone(), at, occurred_at, text, tags });
+        let actions = actions.map(|a| a.iter().map(|t| slugify(t)).filter(|t| !t.is_empty()).collect());
+        self.episodes.push(Episode {
+            id: id.clone(),
+            at,
+            occurred_at,
+            text,
+            tags,
+            actions,
+            folded_actions: BTreeMap::new(),
+            folded_at: Vec::new(),
+        });
         while self.episodes.len() > STREAM_HARD_CAP {
             self.fold_oldest(COMPRESS_BATCH, None);
         }
@@ -550,13 +758,29 @@ impl Graph {
         let take = take.min(self.episodes.len());
         let batch: Vec<Episode> = self.episodes.drain(0..take).collect();
         let mut tags: Vec<String> = Vec::new();
+        let mut folded_actions: BTreeMap<String, Vec<u64>> = BTreeMap::new();
+        let mut folded_at: Vec<u64> = Vec::new();
         for e in &batch {
+            folded_at.extend(e.folded_at.iter().copied());
+            if e.user_acted() {
+                folded_at.push(e.at);
+            }
             for t in &e.tags {
                 if !tags.contains(t) {
                     tags.push(t.clone());
                 }
             }
+            for (action, ats) in &e.folded_actions {
+                folded_actions.entry(action.clone()).or_default().extend(ats.iter().copied());
+            }
+            for action in e.actions.iter().flatten() {
+                folded_actions.entry(action.clone()).or_default().push(e.event_at());
+            }
         }
+        for ats in folded_actions.values_mut() {
+            ats.sort_unstable();
+        }
+        folded_at.sort_unstable();
         let text = text.unwrap_or_else(|| {
             let mut text = format!("{MECH_DIGEST_PREFIX}{} earlier episodes] ", batch.len());
             let mut omitted = 0usize;
@@ -587,6 +811,9 @@ impl Graph {
             occurred_at: batch.first().map(|e| e.event_at()),
             text,
             tags,
+            actions: Some(Vec::new()),
+            folded_actions,
+            folded_at,
         };
         self.episodes.insert(0, digest);
         let dropped: Vec<&str> = batch.iter().map(|e| e.id.as_str()).collect();
@@ -741,13 +968,10 @@ impl Graph {
     /// written before they held.
     pub fn normalize(&mut self) -> Normalized {
         let mut out = Normalized::default();
-        if !self.distillants.contains_key(PROFILE_APEX) {
-            self.distillants.insert(
-                PROFILE_APEX.to_string(),
-                Distillant::bare(PROFILE_APEX, Tree::Profile, "Character", Vec::new(), Vec::new()),
-            );
-            out.apex_created = true;
-        }
+        let added = self.ensure_standing_crowns();
+        out.apex_created = added.iter().any(|id| id == PROFILE_APEX);
+        out.crowns_added = added.into_iter().filter(|id| id != PROFILE_APEX).collect();
+        out.future_stamps_dropped = self.drop_future_stamps();
         let distillant_ids: Vec<Id> = self.distillants.keys().cloned().collect();
         for id in distillant_ids {
             let m = &self.distillants[&id];
@@ -808,11 +1032,17 @@ pub struct Normalized {
     pub homed_under_apex: Vec<Id>,
     /// Whether the apex itself was missing and had to be created.
     pub apex_created: bool,
+    pub crowns_added: Vec<Id>,
+    pub future_stamps_dropped: u32,
 }
 
 impl Normalized {
     pub fn is_empty(&self) -> bool {
-        self.antichained.is_empty() && self.homed_under_apex.is_empty() && !self.apex_created
+        self.antichained.is_empty()
+            && self.homed_under_apex.is_empty()
+            && !self.apex_created
+            && self.crowns_added.is_empty()
+            && self.future_stamps_dropped == 0
     }
 }
 
@@ -856,11 +1086,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_graph_from_before_a_crown_existed_grows_it_on_normalize() {
+        let mut g = Graph::seed();
+        g.distillants.remove(HABITS);
+        g.distillants.remove(TASTE);
+        g.distillants.remove("money-style");
+        let repaired = g.normalize();
+        assert_eq!(repaired.crowns_added, vec![HABITS.to_string(), TASTE.to_string()]);
+        assert!(!repaired.apex_created);
+        assert!(g.distillants[HABITS].is_bare());
+        assert!(!g.distillants.contains_key("money-style"), "an axis is seeded once; a merged-away axis stays merged");
+        assert!(g.normalize().is_empty(), "idempotent: a complete graph adds nothing");
+        assert!(is_standing_crown(HABITS) && is_standing_crown(PROFILE_APEX) && !is_standing_crown("temperament"));
+    }
+
+    #[test]
+    fn a_habit_renders_its_count_ageless_or_with_a_clock() {
+        let mut d = Distillant::bare("habits/x", Tree::Registry, "X", vec![HABITS.into()], vec![]);
+        assert_eq!(d.tally_note(None), "");
+        d.tally = Some(Tally {
+            actions: vec!["x".into()], n_all: 17, n_30d: 6, n_7d: 2, first_seen: 0, last_seen: 100 * 86_400,
+            distillants: 12, median_gap_secs: 2 * 86_400, computed_at: 103 * 86_400, faded: false,
+        });
+        assert_eq!(d.tally_note(None), " (×17, 6 in the last 30 days)");
+        assert_eq!(d.tally_note(Some(103 * 86_400)), " (×17, last 3d ago)");
+    }
+
+    #[test]
     fn seed_has_crown_roots() {
         let g = Graph::seed();
         assert!(g.distillants.contains_key("money"));
         assert!(g.distillants.contains_key("communication"));
-        assert_eq!(g.roots(Tree::Registry).len(), 4);
+        let mut crowns: Vec<&str> = g.roots(Tree::Registry).iter().map(|c| c.id.as_str()).collect();
+        crowns.sort();
+        assert_eq!(crowns, vec![HABITS, "life", "money", "people", RHYTHMS, TASTE, "work"]);
         let profile_roots = g.roots(Tree::Profile);
         assert_eq!(profile_roots.len(), 1, "the apex is the profile's one root");
         assert_eq!(profile_roots[0].id, PROFILE_APEX);
@@ -965,6 +1224,8 @@ mod tests {
                     consolidated_at: 0,
                     line_changed_at: 0,
                     forgotten_at: 0,
+                    tally: None,
+                    rhythm: None,
                 },
             );
         }
