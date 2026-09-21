@@ -4,6 +4,7 @@ pub mod consolidate;
 pub mod harvest;
 pub mod llm;
 pub mod model;
+pub mod pattern;
 pub mod projection;
 pub mod replay;
 pub mod routing;

@@ -342,7 +342,7 @@ pub fn render_injection(graph: &Graph, p: &Projection, now: u64) -> Option<Strin
     );
     for o in &p.opened {
         if let Some(m) = graph.distillants.get(&o.distillant_id) {
-            let _ = writeln!(out, "## {} — {}", m.id, m.headline());
+            let _ = writeln!(out, "## {} — {}{}", m.id, m.headline(), m.tally_note(Some(now)));
         }
         for id in &o.leaf_ids {
             render_leaf_line(&mut out, graph, id, now);
@@ -401,7 +401,7 @@ fn walk_tree(out: &mut String, graph: &Graph, distillant_id: &str, depth: usize,
     let Some(m) = graph.distillants.get(distillant_id) else { return };
     let indent = "  ".repeat(depth);
     let n_leaves = graph.leaves_under(distillant_id).len();
-    let _ = write!(out, "{indent}- {} — {}", m.id, m.headline());
+    let _ = write!(out, "{indent}- {} — {}{}", m.id, m.headline(), m.tally_note(None));
     if !with_leaves && n_leaves > 0 {
         let _ = write!(out, " [{n_leaves} leaves]");
     }
@@ -461,7 +461,7 @@ pub fn render_open(graph: &Graph, distillant_id: &str, now: u64) -> String {
             "No distillant with id \"{distillant_id}\". Use an id exactly as it appears in the memory map, or \"{RULES}\" for the standing instructions."
         );
     };
-    let mut out = format!("# {} — {}\n", m.id, m.headline());
+    let mut out = format!("# {} — {}{}\n", m.id, m.headline(), m.tally_note(Some(now)));
     let mut leaves = graph.leaves_under(distillant_id);
     leaves.sort_by(|a, b| {
         belief::score(b, now)
@@ -494,9 +494,10 @@ pub fn render_open(graph: &Graph, distillant_id: &str, now: u64) -> String {
         for c in children {
             let _ = writeln!(
                 out,
-                "- {} — {} [{} leaves]",
+                "- {} — {}{} [{} leaves]",
                 c.id,
                 c.headline(),
+                c.tally_note(Some(now)),
                 graph.leaves_under(&c.id).len()
             );
         }
@@ -524,6 +525,7 @@ mod tests {
                 consolidated_at: 0,
                 line_changed_at: 0,
                 forgotten_at: 0,
+                tally: None,
             },
         );
         for i in 0..8 {
@@ -537,6 +539,30 @@ mod tests {
             g.leaves.insert(l.id.clone(), l);
         }
         g
+    }
+
+    #[test]
+    fn a_habit_shows_its_count_in_the_map_the_open_and_the_hint() {
+        use crate::model::Tally;
+        let mut g = fixture();
+        let day = 86_400;
+        let mut h = Distillant::bare("habits/publishes-pages", Tree::Registry, "Publishes pages", vec!["habits".into()], vec!["website".into()]);
+        h.line = "Publishes a page for almost anything.".into();
+        h.line_changed_at = 1;
+        h.tally = Some(Tally {
+            actions: vec!["published-page".into()], n_all: 17, n_30d: 6, n_7d: 2, first_seen: 0, last_seen: 97 * day,
+            distillants: 12, median_gap_secs: 2 * day, computed_at: 100 * day, faded: false,
+        });
+        g.distillants.insert(h.id.clone(), h);
+        let l = Leaf::state("poker-page".into(), "The poker page is live.".into(), vec!["work".into(), "habits/publishes-pages".into()], 0.5, 90 * day);
+        g.leaves.insert(l.id.clone(), l);
+        let map = render_registry_skeleton(&g);
+        assert!(map.contains("- habits/publishes-pages — Publishes a page for almost anything. (×17, 6 in the last 30 days) [1 leaves]"), "{map}");
+        let open = render_open(&g, "habits/publishes-pages", 100 * day);
+        assert!(open.starts_with("# habits/publishes-pages — Publishes a page for almost anything. (×17, last 3d ago)"), "{open}");
+        let p = project(&g, "make me a website", 100 * day);
+        let hint = render_injection(&g, &p, 100 * day).unwrap();
+        assert!(hint.contains("## habits/publishes-pages — Publishes a page for almost anything. (×17, last 3d ago)"), "{hint}");
     }
 
     #[test]
@@ -591,6 +617,7 @@ mod tests {
                     consolidated_at: 0,
                     line_changed_at: 0,
                     forgotten_at: 0,
+                    tally: None,
                 },
             );
             let l = Leaf::state(
@@ -678,6 +705,7 @@ mod tests {
                     consolidated_at: 0,
                     line_changed_at: 0,
                     forgotten_at: 0,
+                    tally: None,
                 },
             );
             for i in 0..5 {

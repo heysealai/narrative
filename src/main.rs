@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 
 use narrative::llm::{AnthropicClient, Llm, MockLlm};
 use narrative::sim::{run_repl, Sim};
-use narrative::{consolidate, harvest, model, projection, replay, store};
+use narrative::{consolidate, harvest, model, pattern, projection, replay, store};
 
 const USAGE: &str = "\
 narrative — structured long-term memory engine
@@ -24,6 +24,12 @@ narrative — structured long-term memory engine
                                   print the redistill input for one distillant
   narrative redistill <distillant-id> <json|@file|->
                                   apply a redistill response to that distillant
+  narrative pattern-prompt        print the input for the due pattern step (tag
+                                  untagged episodes, or rule on a repeated action)
+  narrative pattern [json|@file|-]
+                                  apply a pattern response to the due step (a
+                                  fold takes no response)
+  narrative habits                the standing habits with their counts
   narrative open <distillant-id>    read leaves under one distillant
   narrative rules                 standing instructions (pinned first)
   narrative profile               pinned tier (always-inline profile)
@@ -38,14 +44,18 @@ narrative — structured long-term memory engine
 
 The project/harvest-prompt/apply subcommands externalize the model role:
 whatever intelligence drives the CLI plays agent and harvester. Memory lives
-in $NARRATIVE_DATA/memory.json (default ./data).";
+in $NARRATIVE_DATA/memory.json (default ./data). $NARRATIVE_NOW (unix seconds)
+sets the clock every pass and render reads, for driving a graph at a chosen time.";
 
 /// The CLI is keyless — the driving intelligence is the model. Tell it when
 /// a pass is due so it can run one (redistill-prompt / digest-prompt, then
 /// apply the response).
-fn print_due_hints(graph: &narrative::model::Graph) {
+fn print_due_hints(graph: &narrative::model::Graph, now: u64) {
     if let Some(id) = consolidate::due(graph) {
         println!("⚙ consolidation due: {id} (pressure {})", consolidate::pressure(graph, &id));
+    }
+    if let Some(step) = pattern::due(graph, now) {
+        println!("⚙ {}", step.describe());
     }
     if let Some(step) = consolidate::stream_due(graph) {
         println!("⚙ {}", step.describe(graph));
@@ -72,7 +82,10 @@ fn main() -> Result<()> {
 
     let data_dir = std::env::var("NARRATIVE_DATA").unwrap_or_else(|_| "data".to_string());
     let data_file = PathBuf::from(data_dir).join("memory.json");
-    let now = model::now();
+    let now = match std::env::var("NARRATIVE_NOW") {
+        Ok(secs) => secs.trim().parse().map_err(|_| anyhow::anyhow!("NARRATIVE_NOW must be unix seconds"))?,
+        Err(_) => model::now(),
+    };
 
     let Some(cmd) = args.first().map(String::as_str) else {
         // No subcommand: interactive REPL with a real (or mock) model.
@@ -118,7 +131,7 @@ fn main() -> Result<()> {
             for t in harvest::apply_ops(&mut graph, ops, now).traces {
                 println!("✎ {t}");
             }
-            print_due_hints(&graph);
+            print_due_hints(&graph, now);
             store::save(&data_file, &graph)?;
         }
         "digest-prompt" => match consolidate::stream_due(&graph) {
@@ -143,12 +156,12 @@ fn main() -> Result<()> {
             for t in consolidate::apply_digest(&mut graph, text, take, now)? {
                 println!("✎ {t}");
             }
-            print_due_hints(&graph);
+            print_due_hints(&graph, now);
             store::save(&data_file, &graph)?;
         }
         "redistill-prompt" => {
             let id = args.get(1).map(String::as_str).unwrap_or("");
-            match consolidate::render_redistill_prompt(&graph, id) {
+            match consolidate::render_redistill_prompt(&graph, id, now) {
                 Some(p) => print!("{p}"),
                 None => bail!("no distillant \"{id}\""),
             }
@@ -161,8 +174,40 @@ fn main() -> Result<()> {
             for t in consolidate::apply_redistilled(&mut graph, id, &raw, now)? {
                 println!("✎ {t}");
             }
-            print_due_hints(&graph);
+            print_due_hints(&graph, now);
             store::save(&data_file, &graph)?;
+        }
+        "pattern-prompt" => match pattern::due(&graph, now) {
+            Some(step) => match pattern::render_prompt(&graph, &step, now) {
+                Some(p) => print!("{p}"),
+                None => println!("({} — mechanical; run `narrative pattern` with no response)", step.describe()),
+            },
+            None => println!("(no pattern step due)"),
+        },
+        "pattern" => {
+            let Some(step) = pattern::due(&graph, now) else {
+                bail!("no pattern step due");
+            };
+            let raw = match (step.needs_model(), args.get(1).map(String::as_str)) {
+                (false, _) => String::new(),
+                (true, arg) => text_arg(arg.unwrap_or("-"))?,
+            };
+            for t in pattern::apply(&mut graph, &step, &raw, now)? {
+                println!("✎ {t}");
+            }
+            print_due_hints(&graph, now);
+            store::save(&data_file, &graph)?;
+        }
+        "habits" => {
+            let mut habits: Vec<&model::Distillant> = graph.distillants.values().filter(|m| m.tally.is_some()).collect();
+            habits.sort_by(|a, b| b.tally.as_ref().map(|t| t.last_seen).cmp(&a.tally.as_ref().map(|t| t.last_seen)));
+            if habits.is_empty() {
+                println!("(no habits yet)");
+            }
+            for h in habits {
+                let t = h.tally.as_ref().expect("filtered on tally");
+                println!("- {}{} — {}\n    {}: {}", h.id, h.tally_note(Some(now)), h.headline(), t.actions.join(" + "), pattern::tally_words(t, now));
+            }
         }
         "open" => {
             print!("{}", projection::render_open(&graph, args.get(1).map(String::as_str).unwrap_or(""), now))
@@ -179,7 +224,7 @@ fn main() -> Result<()> {
                 println!("[{}] {} {}", e.id, model::age_str(now, e.event_at()), e.text);
             }
         }
-        "stats" => print!("{}", consolidate::stats(&graph)),
+        "stats" => print!("{}", consolidate::stats(&graph, now)),
         "forget" => {
             let id = args.get(1).map(String::as_str).unwrap_or("");
             let Some(gone) = graph.forget(id, now) else {

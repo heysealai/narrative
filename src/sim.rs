@@ -163,7 +163,7 @@ impl Sim {
                 }
                 Err(e) => trace(&format!("⚠ digest failed: {e}")),
             },
-            "/stats" => print!("{}", consolidate::stats(&self.graph)),
+            "/stats" => print!("{}", consolidate::stats(&self.graph, model::now())),
             "/forget" => match self.graph.forget(arg, model::now()) {
                 Some(gone) => {
                     trace(&format!(

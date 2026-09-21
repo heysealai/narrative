@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 use crate::belief;
 use crate::llm::{ChatRequest, Llm};
-use crate::model::{Belief, Distillant, Graph, Leaf, LeafKind, Nudge, Salience, Species, Supersession, Tree, PROFILE_APEX};
+use crate::model::{age_str, is_standing_crown, Belief, Distillant, Graph, Leaf, LeafKind, Nudge, Salience, Species, Supersession, Tree, PROFILE_APEX};
 use crate::projection;
 use crate::routing;
 
@@ -58,7 +58,7 @@ pub struct RuleOp {
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Op {
     /// Stream: something that happened, time-anchored, immutable.
-    Episode { text: String, tags: Vec<String>, occurred_at: Option<u64> },
+    Episode { text: String, tags: Vec<String>, actions: Vec<String>, occurred_at: Option<u64> },
     /// Registry: a state fact — current value with supersession semantics.
     State {
         id: String,
@@ -103,6 +103,7 @@ pub enum Op {
     Distill { distillant: String, line: String },
     /// Re-home a leaf: replace its parent set (e.g. under a finer distillant).
     Move { leaf: String, parents: Vec<String> },
+    Adopt { leaf: String, parent: String },
     /// Re-home a distillant under different parents (empty = promote to root).
     Reparent { distillant: String, parents: Vec<String> },
     /// Absorb a duplicate leaf into the canonical one; evidence and counts combine.
@@ -143,6 +144,7 @@ struct HarvestOut {
     aliases: Vec<AliasOp>,
     distills: Vec<DistillOp>,
     moves: Vec<MoveOp>,
+    adopts: Vec<AdoptOp>,
     reparents: Vec<ReparentOp>,
     merge_leaves: Vec<MergeOp>,
     merge_distillants: Vec<MergeOp>,
@@ -155,6 +157,8 @@ struct HarvestOut {
 struct EpisodeOp {
     text: String,
     tags: Vec<String>,
+    #[serde(default)]
+    actions: Vec<String>,
     #[serde(default)]
     occurred_at: Option<u64>,
 }
@@ -216,6 +220,12 @@ struct MoveOp {
 }
 
 #[derive(Deserialize, Debug)]
+struct AdoptOp {
+    leaf: String,
+    parent: String,
+}
+
+#[derive(Deserialize, Debug)]
 struct ReparentOp {
     distillant: String,
     parents: Vec<String>,
@@ -260,7 +270,7 @@ impl HarvestOut {
         }
         for e in self.episodes {
             if !e.text.trim().is_empty() {
-                ops.push(Op::Episode { text: e.text, tags: e.tags, occurred_at: e.occurred_at });
+                ops.push(Op::Episode { text: e.text, tags: e.tags, actions: e.actions, occurred_at: e.occurred_at });
             }
         }
         for s in self.states {
@@ -299,6 +309,9 @@ impl HarvestOut {
         }
         for m in self.moves {
             ops.push(Op::Move { leaf: m.leaf, parents: m.parents });
+        }
+        for a in self.adopts {
+            ops.push(Op::Adopt { leaf: a.leaf, parent: a.parent });
         }
         for r in self.reparents {
             ops.push(Op::Reparent { distillant: r.distillant, parents: r.parents });
@@ -357,9 +370,10 @@ pub fn ops_schema() -> Value {
                     "properties": {
                         "text": {"type": "string"},
                         "tags": {"type": "array", "items": {"type": "string"}, "description": "involved distillant ids"},
+                        "actions": {"type": "array", "items": {"type": "string"}, "description": "what the USER did in this event, as 0-2 short verb-shaped kebab tags ('published-page', 'emailed-result', 'scheduled-run'); reuse a spelling from the action tally when one fits; empty when the event is not the user acting"},
                         "occurred_at": {"type": ["integer", "null"], "description": "unix seconds when the event actually happened, when the turn says so ('last month', a date, imported backlog); null = it happened now"}
                     },
-                    "required": ["text", "tags", "occurred_at"],
+                    "required": ["text", "tags", "actions", "occurred_at"],
                     "additionalProperties": false
                 }
             },
@@ -467,6 +481,19 @@ pub fn ops_schema() -> Value {
                     "additionalProperties": false
                 }
             },
+            "adopts": {
+                "description": "Give a leaf one more parent without removing any: the evidence of a habit files under the habits/* distillant beside its project.",
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "leaf": {"type": "string", "description": "existing leaf id"},
+                        "parent": {"type": "string", "description": "existing distillant id to add as a parent"}
+                    },
+                    "required": ["leaf", "parent"],
+                    "additionalProperties": false
+                }
+            },
             "reparents": {
                 "description": "Re-home a distillant under different parent distillants.",
                 "type": "array",
@@ -546,7 +573,7 @@ pub fn ops_schema() -> Value {
                 }
             }
         },
-        "required": ["distillants", "episodes", "states", "dispositions", "rules", "reinforces", "aliases", "distills", "moves", "reparents", "merge_leaves", "merge_distillants", "forgets", "manual_upserts", "manual_retires"],
+        "required": ["distillants", "episodes", "states", "dispositions", "rules", "reinforces", "aliases", "distills", "moves", "adopts", "reparents", "merge_leaves", "merge_distillants", "forgets", "manual_upserts", "manual_retires"],
         "additionalProperties": false
     })
 }
@@ -561,13 +588,13 @@ const HARVESTER_SYSTEM: &str = r#"You are the memory architect for a personal as
 Rules:
 1. Distill only what is durable. Chitchat, pleasantries, and one-off questions leave no trace. All sections empty is a perfectly good harvest.
 2. One fact per leaf. Small, boring, atomic sentences. Never bundle.
-3. Distillant creation is your judgment call: a durable participant in the user's life (a person, an obligation, a project) deserves a distillant (e.g. people/lisa, money/rent); an incidental mention stays a tag on an episode. Distillant ids are path-like, under the existing crown roots. Declare new distillants in the distillants section; they are applied before leaves. The user themself is never a distillant: the whole graph already models them — their history, doings, and possessions live under the topical crowns, their tendencies in the profile. people/* is for the OTHER people in their life.
+3. Distillant creation is your judgment call: a durable participant in the user's life (a person, an obligation, a project) or a durable way of wanting deserves a distillant (e.g. people/lisa, money/rent, taste/dashboards); an incidental mention stays a tag on an episode. Distillant ids are path-like, under the existing crown roots: people/* for the OTHER people in their life; money/*; work/*; life/* for places, health and possessions; taste/* for how they want things to look, read and be arranged — a standard the user states or corrects toward ("no decoration, every number with its unit") is evidence about them, so it files under taste/*, never as a fact about the one output it was said over; habits/* for ways of acting that repeat across projects. A habit is a count, and one turn never shows the count: you never mint a habits/* distillant — the pattern pass does, from the action tally — but when the directory already lists one that this turn's evidence is an instance of, file the evidence under it too (a second parent beside the project, via the state's distillants or an adopts entry) and tag the episode with it. Declare new distillants in the distillants section; they are applied before leaves. The user themself is never a distillant: the whole graph already models them — their history, doings, and possessions live under the topical crowns, their tendencies in the profile.
 4. Aliases are how future recall works: record the ways the user refers to a THING ("my sister", "lisa.eth", "the landlord") as routing vocabulary — on the state's aliases field or in the aliases section. Routing is a referring-expression index, not a word list: never lift words out of the fact itself, episode detail (numbers, one-off phrasings), or generic phrases a message about anything could contain — every stray term routes unrelated messages here. Single-user memory: possessives like "my sister" are stable aliases. Wallet addresses, handles and emails are exact anchors — always record them. Matching is exact-token, no stemming: include the inflected forms a future message would actually contain ("payment" AND "payments"). Evaluative vocabulary (trust, regret, fear, pride, conflict) is derived from lines automatically — spend aliases and routing on referring expressions, never on facet words.
 5. Cross-match against the comparanda you are given. Classify each state: novel (nothing like it exists), duplicate (already stored, restated), supports (new evidence for an existing leaf — set target), contradicts (casts doubt, no clear replacement — set target), supersedes (clear new value replacing an old one — set target). Never store the same knowledge twice as novel. When the turn merely adds evidence for an existing leaf and there is nothing to restate, emit a reinforces entry instead of a supports state.
 6. You classify; the runtime does the arithmetic. Never hedge text with probabilities.
 7. importance: 0.9+ safety-critical facts, money facts, explicit "remember this"; ~0.5 ordinary facts; ~0.2 minor color. High-importance exceptions ("got scammed by X once") deserve their own leaf — never average them away.
 8. Dispositions: the leaf text states the +1 pole of the axis. dir=+1 pushes toward the statement, dir=-1 against it. The whole profile is shown to you every time (pinned): an observation about a tendency already tracked is a nudge on that existing id — a new leaf only for a genuinely new axis. Keep profile axes few and broad. The profile's root, `character`, is the whole-person estimate consolidation distills from the axes: never hang a leaf there — a disposition always belongs to an axis under it.
-9. Episodes: log events worth remembering as events (payments, decisions, incidents, plans made). Tag with involved distillant ids. The leaf ops you emit alongside will be wired to them as evidence automatically.
+9. Episodes: log events worth remembering as events (payments, decisions, incidents, plans made). Tag with involved distillant ids. Set actions to what the USER did in the event — the verb, as 0-2 short kebab tags ("published-page", "emailed-result", "scheduled-run", "paid-stranger") — reusing a spelling from the action tally whenever one fits, so the count stays one count; an event that is not the user acting (news, someone else's doing, a state of the world) gets an empty list. The leaf ops you emit alongside will be wired to them as evidence automatically.
 10. Use distill to refresh a distillant's one-line summary when what you learned makes the old line stale.
 11. Time: everything is stamped with write time automatically. When the turn says WHEN something actually happened or changed ("last month", "back in 2019", dated backlog text), set occurred_at to unix seconds; otherwise null. Recall renders ages from it — "changed 2mo ago" should mean two months of the user's life, not two months since you wrote it.
 12. Structure follows understanding: when you create a finer distillant that better fits leaves you can see in the comparanda, move those leaves under it with moves entries. Merge ops (merge_leaves, merge_distillants) repair duplicates discovered after the fact — two leaves or distillants that turned out to be the same thing. Use structural ops sparingly in harvest; consolidation does the heavy restructuring.
@@ -794,6 +821,24 @@ fn render_pinned_profile(graph: &Graph) -> String {
     out
 }
 
+pub const TALLY_LINES: usize = 12;
+
+pub fn render_action_tally(graph: &Graph, now: u64) -> String {
+    let ledger = graph.ledger();
+    let mut rows: Vec<(&String, &Vec<u64>)> = ledger.iter().filter(|(_, ats)| !ats.is_empty()).collect();
+    rows.sort_by(|(a, x), (b, y)| y.len().cmp(&x.len()).then_with(|| a.cmp(b)));
+    let mut out = String::new();
+    for (action, ats) in rows.into_iter().take(TALLY_LINES) {
+        let last = ats.last().copied().unwrap_or(0);
+        let _ = write!(out, "- {action} ×{}, last {}", ats.len(), age_str(now, last));
+        if let Some(habit) = graph.habit_of(action) {
+            let _ = write!(out, " → {}", habit.id);
+        }
+        out.push('\n');
+    }
+    out
+}
+
 /// A rule-shaped ask the assistant acknowledged that memory has not yet
 /// resolved: the host's id for it, the user's words, the assistant's reading.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -839,6 +884,13 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
             render_instructions(instructions)
         ),
     };
+    let tally = render_action_tally(graph, now);
+    let tally_section = match tally.is_empty() {
+        true => String::new(),
+        false => format!(
+            "# Action tally (pinned — how often the user has done each kind of thing; reuse these spellings for episode actions; → names the habits/* distillant that stands for one)\n{tally}\n"
+        ),
+    };
     let directory_heading = match scope {
         DirectoryScope::Full | DirectoryScope::Compact => "# Memory directory (all distillants)",
         DirectoryScope::Selective => {
@@ -849,6 +901,7 @@ pub fn build_user_message(graph: &Graph, input: &HarvestInput, now: u64, scope: 
         "{directory_heading}\n{}\n\
          # Standing rules (pinned — every instruction already in force, by id; an instruction that changes one supersedes or retracts it by id, never adds a second; one the user withdrew is listed after, to reinstate by id)\n{}\n\
          # Profile axes (pinned — every disposition already tracked; nudge one of these by id, never mint a near-duplicate)\n{}\n\
+         {tally_section}\
          # Existing leaves related to this turn (comparanda — cross-match against these)\n{}\n\
          {manual_section}\
          {instructions_section}\
@@ -1097,6 +1150,9 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
     if repaired.apex_created {
         traces.push(format!("⇢ profile apex {} created", PROFILE_APEX));
     }
+    if !repaired.crowns_added.is_empty() {
+        traces.push(format!("⇢ crowns added: {}", repaired.crowns_added.join(", ")));
+    }
     if !repaired.homed_under_apex.is_empty() {
         traces.push(format!("⇢ axes homed under the apex: {}", repaired.homed_under_apex.join(", ")));
     }
@@ -1124,6 +1180,7 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                 // A brand-new line is changed material from any parent's view.
                 line_changed_at: now,
                 forgotten_at: 0,
+                tally: None,
             });
             let rewritten = existed && !line.is_empty();
             if existed {
@@ -1147,8 +1204,8 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
     // Episodes next; they become evidence for this batch's leaves.
     let mut evidence: Vec<String> = Vec::new();
     for op in &ops {
-        if let Op::Episode { text, tags, occurred_at } = op {
-            let id = graph.push_episode(text.clone(), tags.clone(), now, *occurred_at);
+        if let Op::Episode { text, tags, actions, occurred_at } = op {
+            let id = graph.push_episode_acting(text.clone(), tags.clone(), Some(actions.clone()), now, *occurred_at);
             traces.push(format!("◦ episode {id}: {text}"));
             evidence.push(id);
         }
@@ -1320,6 +1377,7 @@ pub fn apply_ops(graph: &mut Graph, ops: Vec<Op>, now: u64) -> Applied {
                 }
             }
             Op::Move { leaf, parents } => apply_move(graph, leaf, parents, now, &mut traces),
+            Op::Adopt { leaf, parent } => apply_adopt(graph, leaf, parent, now, &mut traces),
             Op::Reparent { distillant, parents } => {
                 apply_reparent(graph, distillant, parents, &mut traces)
             }
@@ -1581,6 +1639,36 @@ fn apply_move(graph: &mut Graph, leaf_id: String, parents: Vec<String>, now: u64
     traces.push(format!("→ moved [{}] under {}", leaf_id, leaf.parents.join("+")));
 }
 
+fn apply_adopt(graph: &mut Graph, leaf_id: String, parent: String, now: u64, traces: &mut Vec<String>) {
+    let Some(leaf) = graph.leaves.get(&leaf_id) else {
+        traces.push(format!("⚠ adopt of unknown leaf [{leaf_id}]; skipped"));
+        return;
+    };
+    let tree = match leaf.species() {
+        Species::State => Tree::Registry,
+        Species::Disposition => Tree::Profile,
+        Species::Rule => {
+            traces.push(format!("⚠ adopt of rule [{leaf_id}]; a rule hangs under nothing; skipped"));
+            return;
+        }
+    };
+    if graph.distillants.get(&parent).map(|m| m.tree) != Some(tree) {
+        traces.push(format!("⚠ adopt of [{leaf_id}] by {parent}: parent missing or wrong tree; skipped"));
+        return;
+    }
+    let mut parents = leaf.parents.clone();
+    parents.push(parent.clone());
+    let parents = graph.antichain(parents);
+    let leaf = graph.leaves.get_mut(&leaf_id).expect("checked above");
+    if leaf.parents == parents {
+        traces.push(format!("≡ [{leaf_id}] already under {parent}"));
+        return;
+    }
+    leaf.parents = parents;
+    leaf.updated_at = now;
+    traces.push(format!("↷ adopted [{}] under {} (now under {})", leaf_id, parent, leaf.parents.join("+")));
+}
+
 fn apply_reparent(graph: &mut Graph, distillant_id: String, parents: Vec<String>, traces: &mut Vec<String>) {
     let Some(tree) = graph.distillants.get(&distillant_id).map(|m| m.tree) else {
         traces.push(format!("⚠ reparent of unknown distillant {distillant_id}; skipped"));
@@ -1675,6 +1763,10 @@ fn apply_merge_distillant(graph: &mut Graph, from: String, into: String, traces:
         traces.push(format!("⚠ merge_distillants {from} → {into} invalid (missing, same id, or tree mismatch); skipped"));
         return;
     }
+    if is_standing_crown(&from) {
+        traces.push(format!("⚠ merge_distillants {from} → {into}: a seed crown is structure and is never merged away (merge {into} into it instead); skipped"));
+        return;
+    }
     let src = graph.distillants.remove(&from).expect("checked above");
     for leaf in graph.leaves.values_mut() {
         if leaf.parents.contains(&from) {
@@ -1734,6 +1826,67 @@ mod tests {
         d
     }
 
+    #[test]
+    fn an_episode_carries_its_actions_and_the_tally_pins_them_for_the_next_harvest() {
+        let mut g = Graph::seed();
+        let before = build_user_message(&g, &HarvestInput::turn("hi", "hello"), 1_000, DirectoryScope::Selective);
+        assert!(!before.contains("# Action tally"), "no marks, no section: {before}");
+        apply_ops(
+            &mut g,
+            vec![Op::Episode {
+                text: "Published the poker page.".into(),
+                tags: vec!["work".into()],
+                actions: vec!["Published Page".into(), "".into()],
+                occurred_at: None,
+            }],
+            1_000,
+        );
+        assert_eq!(g.episodes[0].actions, Some(vec!["published-page".to_string()]));
+        let after = build_user_message(&g, &HarvestInput::turn("hi", "hello"), 1_000, DirectoryScope::Selective);
+        assert!(after.contains("# Action tally"), "{after}");
+        assert!(after.contains("- published-page ×1, last today"), "{after}");
+        let tally_at = after.find("# Action tally").unwrap();
+        let comparanda_at = after.find("# Existing leaves").unwrap();
+        assert!(tally_at < comparanda_at, "pinned before the turn-local sections");
+    }
+
+    #[test]
+    fn a_seed_crown_is_never_merged_away() {
+        let mut g = Graph::seed();
+        g.distillants.insert("life/habits".into(), Distillant::bare("life/habits", Tree::Registry, "Habits", vec!["life".into()], vec![]));
+        let applied = apply_ops(&mut g, vec![Op::MergeDistillant { from: "habits".into(), into: "life/habits".into() }], 1);
+        assert!(g.distillants.contains_key("habits"));
+        assert!(applied.traces.iter().any(|t| t.contains("a seed crown is structure")), "{:?}", applied.traces);
+        apply_ops(&mut g, vec![Op::MergeDistillant { from: "life/habits".into(), into: "habits".into() }], 2);
+        assert!(!g.distillants.contains_key("life/habits"), "the other way round is the merge to make");
+    }
+
+    #[test]
+    fn adopt_adds_a_parent_and_keeps_the_others() {
+        let mut g = Graph::seed();
+        g.distillants.insert("habits/x".into(), Distillant::bare("habits/x", Tree::Registry, "X", vec!["habits".into()], vec![]));
+        let l = Leaf::state("page".into(), "Page is live.".into(), vec!["work".into()], 0.5, 1);
+        g.leaves.insert(l.id.clone(), l);
+        let r = Leaf::rule("five".into(), "five lines".into(), None, 1);
+        g.leaves.insert(r.id.clone(), r);
+        let applied = apply_ops(
+            &mut g,
+            vec![
+                Op::Adopt { leaf: "page".into(), parent: "habits/x".into() },
+                Op::Adopt { leaf: "page".into(), parent: "habits/x".into() },
+                Op::Adopt { leaf: "page".into(), parent: "communication".into() },
+                Op::Adopt { leaf: "five".into(), parent: "habits/x".into() },
+                Op::Adopt { leaf: "nope".into(), parent: "habits/x".into() },
+            ],
+            2,
+        );
+        assert_eq!(g.leaves["page"].parents, vec!["work".to_string(), "habits/x".to_string()]);
+        assert!(g.leaves["five"].parents.is_empty(), "a rule hangs under nothing");
+        let skipped = applied.traces.iter().filter(|t| t.starts_with("⚠ adopt")).count();
+        assert_eq!(skipped, 3, "wrong tree, rule, unknown: {:?}", applied.traces);
+        assert!(applied.traces.iter().any(|t| t.starts_with("≡ [page] already under habits/x")));
+    }
+
     fn rule_op(id: &str, text: &str, relation: RuleRelation, target: &str, instruction: &str) -> Op {
         Op::Rule(RuleOp {
             id: id.into(),
@@ -1755,7 +1908,7 @@ mod tests {
         let applied = apply_ops(
             &mut g,
             vec![
-                Op::Episode { text: "Asked for five-line replies.".into(), tags: vec![], occurred_at: None },
+                Op::Episode { text: "Asked for five-line replies.".into(), tags: vec![], actions: vec![], occurred_at: None },
                 rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", "i-1"),
             ],
             1_000,
@@ -1831,7 +1984,7 @@ mod tests {
         let rules_section = harvester.split("# Standing rules").nth(1).unwrap().split("# Profile axes").next().unwrap();
         assert!(rules_section.contains("- [five-lines] keep replies to five lines\nWithdrawn (out of force"), "{rules_section}");
         assert!(rules_section.contains("- [no-emoji] stop using emoji"), "the harvester sees withdrawn rules by id: {rules_section}");
-        assert!(crate::consolidate::stats(&g).contains("(1 rules, 1 withdrawn)"), "{}", crate::consolidate::stats(&g));
+        assert!(crate::consolidate::stats(&g, 2_000).contains("(1 rules, 1 withdrawn)"), "{}", crate::consolidate::stats(&g, 2_000));
 
         apply_ops(&mut g, vec![rule_op("no-emoji", "", RuleRelation::Retract, "no-emoji", "")], 2_500);
         assert_eq!(g.withdrawn_rules().len(), 1, "no duplicate on record");
@@ -1847,7 +2000,7 @@ mod tests {
             apply_ops(&mut g, vec![rule_op("no-emoji", "stop using emoji", RuleRelation::Novel, "", "i-1")], 1_000);
             apply_ops(&mut g, vec![rule_op("no-emoji", "", RuleRelation::Retract, "no-emoji", "i-2")], 2_000);
             let target = if relation == RuleRelation::Novel { "" } else { "no-emoji" };
-            let ep = Op::Episode { text: "asked for no emoji again".into(), tags: vec![], occurred_at: None };
+            let ep = Op::Episode { text: "asked for no emoji again".into(), tags: vec![], actions: vec![], occurred_at: None };
             let applied = apply_ops(&mut g, vec![ep, rule_op("no-emoji", "no emoji, please", relation, target, "i-3")], 3_000);
             assert_eq!(
                 applied.rules[0].effect,
@@ -1880,7 +2033,7 @@ mod tests {
     }
 
     fn batch_episode(text: &str) -> Op {
-        Op::Episode { text: text.into(), tags: vec![], occurred_at: None }
+        Op::Episode { text: text.into(), tags: vec![], actions: vec![], occurred_at: None }
     }
 
     #[test]
@@ -1967,7 +2120,7 @@ mod tests {
         let mut g = Graph::seed();
         apply_ops(&mut g, vec![state_op("city", "Lives in Lisbon", Relation::Novel, "")], 1_000);
         let ops = vec![
-            Op::Episode { text: "moved on".into(), tags: vec![], occurred_at: None },
+            Op::Episode { text: "moved on".into(), tags: vec![], actions: vec![], occurred_at: None },
             Op::Reinforce { target: "city".into() },
             Op::Forget { target: "city".into() },
             state_op("town", "Lives in Porto", Relation::Novel, ""),
@@ -2014,7 +2167,7 @@ mod tests {
         for text in ["Rent is $2,200/mo.", "Rent is $2,400/mo."] {
             let mut g = Graph::seed();
             apply_ops(&mut g, vec![state_op("rent", "Rent is $2,200/mo.", Relation::Novel, "")], 1_000);
-            let ep = Op::Episode { text: "talked rent".into(), tags: vec![], occurred_at: None };
+            let ep = Op::Episode { text: "talked rent".into(), tags: vec![], actions: vec![], occurred_at: None };
             apply_ops(&mut g, vec![ep, state_op("rent", text, Relation::Novel, "")], 2_000);
             assert_eq!(g.leaves["rent"].evidence.len(), 1, "{text}: the collision cites the batch");
             assert_eq!(g.leaves["rent"].text, text);
@@ -2027,7 +2180,7 @@ mod tests {
         apply_ops(
             &mut g,
             vec![
-                Op::Episode { text: "seeded".into(), tags: vec![], occurred_at: None },
+                Op::Episode { text: "seeded".into(), tags: vec![], actions: vec![], occurred_at: None },
                 state_op("rent", "Rent is $2,200/mo.", Relation::Novel, ""),
                 Op::Disposition { id: "spend".into(), distillants: vec!["money-style".into()], text: "keeps spending tight".into(), dir: 1, note: "n".into(), importance: 0.5 },
                 rule_op("five-lines", "keep replies to five lines", RuleRelation::Novel, "", ""),
@@ -2142,7 +2295,7 @@ mod tests {
         assert!(projection::project(&g, "spend over $20?", 3_000).opened.iter().all(|o| !o.leaf_ids.contains(&"ask-first".to_string())));
         assert!(!render_comparanda(&g, &routing::RoutingTable::build(&g), "spend over $20", 3_000).contains("ask-first"));
         assert!(render_pinned_rules(&g).contains("- [ask-first] ask before any spend over $20"));
-        let stats = crate::consolidate::stats(&g);
+        let stats = crate::consolidate::stats(&g, 2_000);
         assert!(!stats.contains("ask-first"), "a rule builds no pressure anywhere: {stats}");
         assert!(stats.contains("(1 rules, 0 withdrawn)"), "{stats}");
         // The user's forget covers a rule like any leaf.
@@ -2190,6 +2343,7 @@ mod tests {
             Op::Episode {
                 text: "User told me their rent.".into(),
                 tags: vec!["money/rent".into()],
+                actions: vec![],
                 occurred_at: None,
             },
             state_op("rent-amount", "Rent is $2,200/mo, due the 1st.", Relation::Novel, ""),
@@ -2319,7 +2473,7 @@ mod tests {
         apply_ops(
             &mut g,
             vec![
-                Op::Episode { text: "Ate katsu curry for lunch.".into(), tags: vec!["life".into()], occurred_at: None },
+                Op::Episode { text: "Ate katsu curry for lunch.".into(), tags: vec!["life".into()], actions: vec![], occurred_at: None },
                 Op::State {
                     id: "eats-katsu-curry".into(),
                     distillants: vec!["life".into()],
@@ -2526,6 +2680,7 @@ mod tests {
                 consolidated_at: 0,
                 line_changed_at: 0,
                 forgotten_at: 0,
+                tally: None,
             },
         );
         g
@@ -2540,6 +2695,10 @@ mod tests {
         assert!(p.contains("\"merge_distillants\"") && p.contains("\"rules\""), "every section present");
         assert!(p.contains("# Standing rules (pinned"), "the rules ride pinned for the harvester: {p}");
         assert!(p.contains("# Turn to harvest\nUser: rent went up to $2,400"));
+        assert!(p.contains("or a durable way of wanting deserves a distillant"), "rule 3 admits ways of acting and wanting: {p}");
+        assert!(p.contains("taste/* for how they want things") && p.contains("habits/* for ways of acting"), "rule 3 names both crowns");
+        assert!(p.contains("you never mint a habits/* distillant"), "habits are the pass's to mint");
+        assert!(p.contains("\"adopts\"") && p.contains("\"actions\""), "the adopt section and episode actions are in the schema");
     }
 
     #[test]
@@ -2756,7 +2915,7 @@ mod tests {
         let mut g = Graph::seed();
         apply_ops(&mut g, vec![state_op("rent-amount", "Rent is $2,200/mo.", Relation::Novel, "")], 1_000);
         let ops = vec![
-            Op::Episode { text: "Paid rent on time again.".into(), tags: vec![], occurred_at: None },
+            Op::Episode { text: "Paid rent on time again.".into(), tags: vec![], actions: vec![], occurred_at: None },
             Op::Reinforce { target: "rent-amount".into() },
         ];
         let traces = apply_ops(&mut g, ops, 2_000).traces;
@@ -2849,7 +3008,7 @@ mod tests {
         apply_ops(
             &mut g,
             vec![
-                Op::Episode { text: "ep one".into(), tags: vec![], occurred_at: None },
+                Op::Episode { text: "ep one".into(), tags: vec![], actions: vec![], occurred_at: None },
                 state_op("rent-a", "Rent is $2,200/mo.", Relation::Novel, ""),
             ],
             1_000,
@@ -2857,7 +3016,7 @@ mod tests {
         apply_ops(
             &mut g,
             vec![
-                Op::Episode { text: "ep two".into(), tags: vec![], occurred_at: None },
+                Op::Episode { text: "ep two".into(), tags: vec![], actions: vec![], occurred_at: None },
                 Op::State {
                     id: "rent-b".into(),
                     distillants: vec!["money".into()],
@@ -2938,6 +3097,7 @@ mod tests {
                 Op::Episode {
                     text: "Sent sister the usual.".into(),
                     tags: vec!["people/sister".into()],
+                    actions: vec![],
                     occurred_at: None,
                 },
                 Op::State {
